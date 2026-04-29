@@ -29,6 +29,10 @@ pub struct InitConfig {
     /// Path to the package manifest JSON inside the guest (e.g. `/etc/packages.json`).
     /// When set, enables network fallback for packages absent from the initrd.
     pub manifest_path: Option<String>,
+    /// HTTPS URL of the package manifest to fetch at boot.
+    /// Takes precedence over `manifest_path` when both are set.
+    /// Only `https://` URLs are accepted; plain HTTP is rejected at parse time.
+    pub manifest_url: Option<String>,
     /// Nix binary cache base URL for network package installation.
     pub cache_base: String,
 }
@@ -45,6 +49,7 @@ impl Default for InitConfig {
             kali_mode: false,
             signal_mode: SignalMode::Serial,
             manifest_path: None,
+            manifest_url: None,
             cache_base: "https://cache.nixos.org".to_string(),
         }
     }

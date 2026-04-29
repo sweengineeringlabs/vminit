@@ -12,3 +12,16 @@
 # Nix binary cache base URL for network package installation.
 # Override to use a private cache: cache_base = "https://cache.company.internal"
 cache_base = "https://cache.nixos.org"
+
+[manifest]
+# HTTPS URL of the package manifest to fetch at boot (set via /etc/xkvm.conf).
+# When manifest_url= is set, vminit fetches this URL after DHCP and uses it
+# as the package manifest. Takes precedence over manifest= (file path).
+# Plain HTTP is rejected; must be https://.
+# Fetch failure is fatal: vminit will not proceed with installation on error.
+#
+# Example (injected by xkvmd at VM creation):
+#   manifest_url = "https://deploy.company.internal/manifests/llmboot-v1.23.json"
+#
+# Leave unset to use the file-path manifest= key instead (default).
+# manifest_url = ""

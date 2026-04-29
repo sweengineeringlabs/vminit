@@ -19,6 +19,7 @@
 mod exec;
 mod ffi;
 mod install;
+mod manifest;
 mod mount;
 mod net;
 mod serial;
@@ -44,8 +45,23 @@ fn main() {
 
     net::dhcp_configure("eth0");
 
-    let manifest_text = cfg.manifest_path.as_ref()
-        .and_then(|p| std::fs::read_to_string(p).ok());
+    let manifest_text = if let Some(ref url) = cfg.manifest_url {
+        let http = swe_justpkg_pkg::UreqClient;
+        match manifest::fetch_manifest(&http, url) {
+            Ok(text) => {
+                serial::log("manifest_url: fetched successfully");
+                Some(text)
+            }
+            Err(e) => {
+                serial::log(&format!("FATAL: manifest_url fetch failed: {e}"));
+                unsafe { ffi::power_off(); }
+                unreachable!()
+            }
+        }
+    } else {
+        cfg.manifest_path.as_ref()
+            .and_then(|p| std::fs::read_to_string(p).ok())
+    };
     install::install_packages(&cfg.packages, rootfs.as_deref(), manifest_text.as_deref(), &cfg.cache_base);
 
     if let Some(ref root) = rootfs {

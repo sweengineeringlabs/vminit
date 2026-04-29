@@ -78,6 +78,7 @@ fn test_parse_config_empty_text_returns_defaults() {
     assert!(cfg.packages.is_empty());
     assert_eq!(cfg.signal_mode, SignalMode::Serial);
     assert_eq!(cfg.manifest_path, None, "manifest_path must default to None");
+    assert_eq!(cfg.manifest_url, None, "manifest_url must default to None");
     assert_eq!(
         cfg.cache_base, "https://cache.nixos.org",
         "cache_base must default to the public Nix cache"
@@ -118,5 +119,36 @@ fn test_parse_config_manifest_absent_leaves_path_none() {
     assert_eq!(
         cfg.manifest_path, None,
         "manifest_path must remain None when manifest= key is absent"
+    );
+}
+
+#[test]
+fn test_parse_config_manifest_url_https_is_accepted() {
+    // Bug caught: manifest_url= ignoring valid HTTPS URLs and leaving the field None.
+    let cfg = parse_config("manifest_url=https://deploy.internal/manifest.json\n");
+    assert_eq!(
+        cfg.manifest_url,
+        Some("https://deploy.internal/manifest.json".to_string()),
+        "manifest_url= with https:// must be stored"
+    );
+}
+
+#[test]
+fn test_parse_config_manifest_url_http_is_rejected() {
+    // Bug caught: plain HTTP manifest_url being accepted and used, bypassing TLS.
+    let cfg = parse_config("manifest_url=http://deploy.internal/manifest.json\n");
+    assert_eq!(
+        cfg.manifest_url, None,
+        "manifest_url= with plain http:// must be rejected (None)"
+    );
+}
+
+#[test]
+fn test_parse_config_manifest_url_absent_leaves_none() {
+    // Bug caught: manifest_url defaulting to some non-None sentinel value.
+    let cfg = parse_config("install=curl\n");
+    assert_eq!(
+        cfg.manifest_url, None,
+        "manifest_url must remain None when manifest_url= key is absent"
     );
 }
