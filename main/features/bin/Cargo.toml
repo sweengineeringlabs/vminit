@@ -10,6 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 swe_vminit_init = { path = "../init" }
+swe_vminit_pkg = { path = "../pkg" }
 swe_vminit_shell = { path = "../shell" }
 
 [profile.release]
