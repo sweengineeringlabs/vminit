@@ -1,0 +1,61 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build and publish xkvm-init ELF
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install musl tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y musl-tools
+
+      - name: Install Rust with musl target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build vminit binary
+        run: |
+          cargo build --release \
+            --target x86_64-unknown-linux-musl \
+            -p swe_vminit_bin
+
+      - name: Verify binary
+        run: |
+          BINARY="main/features/bin/target/x86_64-unknown-linux-musl/release/vminit"
+          test -f "$BINARY" || { echo "error: binary not found at $BINARY"; exit 1; }
+          file "$BINARY"
+          ls -lh "$BINARY"
+
+      - name: Stage release asset
+        run: |
+          cp main/features/bin/target/x86_64-unknown-linux-musl/release/vminit xkvm-init
+
+      - name: Create GitHub Release and upload asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: xkvm-init
+          generate_release_notes: true
