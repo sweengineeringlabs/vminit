@@ -12,6 +12,7 @@
 //!   start_agent=1
 //!   kali_mode=1
 //!   signal_mode=serial|shared_memory
+//!   manifest=/etc/packages.json
 
 use crate::api::config::{InitConfig, SignalMode, VolumeSpec};
 
@@ -54,6 +55,8 @@ pub fn parse_config(text: &str) -> InitConfig {
                 "shared_memory" => SignalMode::SharedMemory,
                 _ => SignalMode::Serial,
             };
+        } else if let Some(val) = line.strip_prefix("manifest=") {
+            config.manifest_path = Some(val.to_string());
         }
     }
 

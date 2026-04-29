@@ -44,7 +44,9 @@ fn main() {
 
     net::dhcp_configure("eth0");
 
-    install::install_packages(&cfg.packages, rootfs.as_deref());
+    let manifest_text = cfg.manifest_path.as_ref()
+        .and_then(|p| std::fs::read_to_string(p).ok());
+    install::install_packages(&cfg.packages, rootfs.as_deref(), manifest_text.as_deref());
 
     if let Some(ref root) = rootfs {
         mount::apply_overlay(root);

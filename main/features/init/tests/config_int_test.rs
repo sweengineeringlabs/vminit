@@ -77,4 +77,24 @@ fn test_parse_config_empty_text_returns_defaults() {
     assert!(cfg.volumes.is_empty());
     assert!(cfg.packages.is_empty());
     assert_eq!(cfg.signal_mode, SignalMode::Serial);
+    assert_eq!(cfg.manifest_path, None, "manifest_path must default to None");
+}
+
+#[test]
+fn test_parse_config_manifest_path_is_set() {
+    let cfg = parse_config("manifest=/etc/packages.json\n");
+    assert_eq!(
+        cfg.manifest_path,
+        Some("/etc/packages.json".to_string()),
+        "manifest= must set manifest_path"
+    );
+}
+
+#[test]
+fn test_parse_config_manifest_absent_leaves_path_none() {
+    let cfg = parse_config("install=curl\ninteractive=1\n");
+    assert_eq!(
+        cfg.manifest_path, None,
+        "manifest_path must remain None when manifest= key is absent"
+    );
 }

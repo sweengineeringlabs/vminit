@@ -26,6 +26,9 @@ pub struct InitConfig {
     pub start_agent: bool,
     pub kali_mode: bool,
     pub signal_mode: SignalMode,
+    /// Path to the package manifest JSON inside the guest (e.g. `/etc/packages.json`).
+    /// When set, enables network fallback for packages absent from the initrd.
+    pub manifest_path: Option<String>,
 }
 
 impl Default for InitConfig {
@@ -39,6 +42,7 @@ impl Default for InitConfig {
             start_agent: false,
             kali_mode: false,
             signal_mode: SignalMode::Serial,
+            manifest_path: None,
         }
     }
 }
