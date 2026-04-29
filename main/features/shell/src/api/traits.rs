@@ -1,18 +1,5 @@
-/// Output sink for shell commands.
-pub trait ShellOutput: Send {
-    fn write_bytes(&self, data: &[u8]);
-
-    fn write_str(&self, s: &str) {
-        self.write_bytes(s.as_bytes());
-    }
-
-    fn write_line(&self, s: &str) {
-        self.write_str(s);
-        self.write_bytes(b"\n");
-    }
-}
-
-/// Input source for the REPL.
-pub trait ShellInput: Send {
-    fn read_byte(&self) -> Option<u8>;
-}
+//! Combined shell I/O traits.
+//!
+//! Canonical definitions have moved to `api/input.rs` (`ShellInput`) and
+//! `api/output.rs` (`ShellOutput`).  This module is retained so that
+//! `tests/traits_int_test.rs` has a valid source-module counterpart.

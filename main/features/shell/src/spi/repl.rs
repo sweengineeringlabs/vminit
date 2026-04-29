@@ -107,7 +107,7 @@ fn read_line(history: &mut History) -> Option<String> {
     io::write_str(&prompt_str);
     history.reset_browse("");
     loop {
-        let byte = match io::read_byte() { Some(b) => b, None => continue };
+        let byte = io::read_byte()?;
         match byte {
             4 if line.is_empty() => { io::write_str("\n"); return None; }
             3 => { io::write_str("^C\n"); io::write_str(&prompt_str); line.clear(); pos = 0; history.reset_browse(""); }
@@ -174,7 +174,9 @@ fn read_line(history: &mut History) -> Option<String> {
 
 fn handle_cd(args: &[String]) -> i32 {
     let target = if args.is_empty() {
-        std::env::var("HOME").unwrap_or_else(|_| "/".to_string())
+        dirs::home_dir()
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "/".to_string())
     } else { args[0].clone() };
     match std::env::set_current_dir(&target) {
         Ok(_) => 0,

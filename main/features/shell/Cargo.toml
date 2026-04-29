@@ -9,6 +9,7 @@ name = "swe_vminit_shell"
 path = "src/lib.rs"
 
 [dependencies]
+dirs = "5"
 
 [[test]]
 name = "shell_int_test"
@@ -25,3 +26,35 @@ path = "tests/io_int_test.rs"
 [[test]]
 name = "io_security_test"
 path = "tests/io_security_test.rs"
+
+[[test]]
+name = "builtins_int_test"
+path = "tests/builtins_int_test.rs"
+
+[[test]]
+name = "builtins_security_test"
+path = "tests/builtins_security_test.rs"
+
+[[test]]
+name = "traits_int_test"
+path = "tests/traits_int_test.rs"
+
+[[test]]
+name = "traits_security_test"
+path = "tests/traits_security_test.rs"
+
+[[test]]
+name = "repl_int_test"
+path = "tests/repl_int_test.rs"
+
+[[test]]
+name = "repl_security_test"
+path = "tests/repl_security_test.rs"
+
+[[test]]
+name = "output_int_test"
+path = "tests/output_int_test.rs"
+
+[[test]]
+name = "input_int_test"
+path = "tests/input_int_test.rs"
