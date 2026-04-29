@@ -79,6 +79,7 @@ fn test_parse_config_empty_text_returns_defaults() {
     assert_eq!(cfg.signal_mode, SignalMode::Serial);
     assert_eq!(cfg.manifest_path, None, "manifest_path must default to None");
     assert_eq!(cfg.manifest_url, None, "manifest_url must default to None");
+    assert_eq!(cfg.manifest_hash, None, "manifest_hash must default to None");
     assert_eq!(
         cfg.cache_base, "https://cache.nixos.org",
         "cache_base must default to the public Nix cache"
@@ -150,5 +151,38 @@ fn test_parse_config_manifest_url_absent_leaves_none() {
     assert_eq!(
         cfg.manifest_url, None,
         "manifest_url must remain None when manifest_url= key is absent"
+    );
+}
+
+#[test]
+fn test_parse_config_manifest_hash_sha256_is_stored() {
+    // Bug caught: manifest_hash= being silently dropped instead of stored.
+    const HASH: &str = "sha256:b94d27b9934d3e08a52e52d7da7dabfac484efe04294e576f4be72b4db32f73e";
+    let cfg = parse_config(&format!("manifest_hash={HASH}\n"));
+    assert_eq!(
+        cfg.manifest_hash,
+        Some(HASH.to_string()),
+        "manifest_hash= must store the raw value including sha256: prefix"
+    );
+}
+
+#[test]
+fn test_parse_config_manifest_hash_absent_leaves_none() {
+    // Bug caught: manifest_hash defaulting to a non-None value.
+    let cfg = parse_config("install=curl\n");
+    assert_eq!(
+        cfg.manifest_hash, None,
+        "manifest_hash must remain None when manifest_hash= key is absent"
+    );
+}
+
+#[test]
+fn test_parse_config_manifest_hash_empty_value_leaves_none() {
+    // Bug caught: manifest_hash= with empty value being stored as Some(""),
+    // causing a spurious hash mismatch at boot.
+    let cfg = parse_config("manifest_hash=\n");
+    assert_eq!(
+        cfg.manifest_hash, None,
+        "manifest_hash= with empty value must leave field as None"
     );
 }

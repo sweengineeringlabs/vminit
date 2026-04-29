@@ -33,6 +33,10 @@ pub struct InitConfig {
     /// Takes precedence over `manifest_path` when both are set.
     /// Only `https://` URLs are accepted; plain HTTP is rejected at parse time.
     pub manifest_url: Option<String>,
+    /// Expected SHA-256 hash of the manifest in `sha256:<hex>` format.
+    /// When set, vminit verifies the manifest after loading and aborts on mismatch.
+    /// When absent, manifest is accepted with a warning log.
+    pub manifest_hash: Option<String>,
     /// Nix binary cache base URL for network package installation.
     pub cache_base: String,
 }
@@ -50,6 +54,7 @@ impl Default for InitConfig {
             signal_mode: SignalMode::Serial,
             manifest_path: None,
             manifest_url: None,
+            manifest_hash: None,
             cache_base: "https://cache.nixos.org".to_string(),
         }
     }

@@ -13,6 +13,8 @@ swe_vminit_init = { path = "../init" }
 swe_vminit_pkg = { path = "../pkg" }
 swe_vminit_shell = { path = "../shell" }
 swe_justpkg_pkg = { path = "../../../../justpkg/main/features/pkg", package = "swe_justpkg_pkg" }
+sha2 = "0.10"
+hex  = "0.4"
 
 [profile.release]
 opt-level = "s"

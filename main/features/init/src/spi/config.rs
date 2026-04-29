@@ -14,6 +14,7 @@
 //!   signal_mode=serial|shared_memory
 //!   manifest=/etc/packages.json
 //!   manifest_url=https://deploy.internal/manifest.json
+//!   manifest_hash=sha256:<64-hex-chars>
 //!   cache_base=https://cache.nixos.org
 
 use crate::api::config::{InitConfig, SignalMode, VolumeSpec};
@@ -62,6 +63,10 @@ pub fn parse_config(text: &str) -> InitConfig {
         } else if let Some(val) = line.strip_prefix("manifest_url=") {
             if val.starts_with("https://") {
                 config.manifest_url = Some(val.to_string());
+            }
+        } else if let Some(val) = line.strip_prefix("manifest_hash=") {
+            if !val.is_empty() {
+                config.manifest_hash = Some(val.to_string());
             }
         } else if let Some(val) = line.strip_prefix("cache_base=") {
             if !val.is_empty() {

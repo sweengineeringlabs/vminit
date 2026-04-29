@@ -62,6 +62,21 @@ fn main() {
         cfg.manifest_path.as_ref()
             .and_then(|p| std::fs::read_to_string(p).ok())
     };
+
+    match (&manifest_text, &cfg.manifest_hash) {
+        (Some(text), Some(hash_spec)) => {
+            if let Err(e) = manifest::verify_manifest_hash(text.as_bytes(), hash_spec) {
+                serial::log(&format!("FATAL: {e}"));
+                unsafe { ffi::power_off(); }
+                unreachable!()
+            }
+        }
+        (Some(_), None) => {
+            serial::log("warning: manifest loaded without integrity check (manifest_hash= not set)");
+        }
+        _ => {}
+    }
+
     install::install_packages(&cfg.packages, rootfs.as_deref(), manifest_text.as_deref(), &cfg.cache_base);
 
     if let Some(ref root) = rootfs {
