@@ -1,0 +1,4 @@
+# SEA project configuration (L0)
+[project]
+name = "vminit"
+workspaces = ["init", "shell", "bin"]

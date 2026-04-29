@@ -1,0 +1,19 @@
+[package]
+name = "swe_vminit_bin"
+version = "0.1.0"
+edition = "2021"
+description = "vminit PID 1 init binary for Linux x86_64 microVMs"
+
+[[bin]]
+name = "vminit"
+path = "src/main.rs"
+
+[dependencies]
+swe_vminit_init = { path = "../init" }
+swe_vminit_shell = { path = "../shell" }
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+panic = "abort"

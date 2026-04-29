@@ -1,0 +1,36 @@
+[package]
+name = "swe_vminit_init"
+version = "0.1.0"
+edition = "2021"
+description = "vminit init configuration, overlay manifest, and signaling types"
+
+[lib]
+name = "swe_vminit_init"
+path = "src/lib.rs"
+
+[dependencies]
+thiserror = "1"
+
+[[test]]
+name = "config_int_test"
+path = "tests/config_int_test.rs"
+
+[[test]]
+name = "config_security_test"
+path = "tests/config_security_test.rs"
+
+[[test]]
+name = "overlay_int_test"
+path = "tests/overlay_int_test.rs"
+
+[[test]]
+name = "overlay_security_test"
+path = "tests/overlay_security_test.rs"
+
+[[test]]
+name = "signal_int_test"
+path = "tests/signal_int_test.rs"
+
+[[test]]
+name = "signal_security_test"
+path = "tests/signal_security_test.rs"

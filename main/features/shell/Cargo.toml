@@ -1,0 +1,27 @@
+[package]
+name = "swe_vminit_shell"
+version = "0.1.0"
+edition = "2021"
+description = "vminit shell — built-in userspace utilities and interactive REPL for microVM guests"
+
+[lib]
+name = "swe_vminit_shell"
+path = "src/lib.rs"
+
+[dependencies]
+
+[[test]]
+name = "shell_int_test"
+path = "tests/shell_int_test.rs"
+
+[[test]]
+name = "shell_security_test"
+path = "tests/shell_security_test.rs"
+
+[[test]]
+name = "io_int_test"
+path = "tests/io_int_test.rs"
+
+[[test]]
+name = "io_security_test"
+path = "tests/io_security_test.rs"
