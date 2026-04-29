@@ -1,5 +1,5 @@
 [workspace]
-members = ["main/features/init", "main/features/shell"]
+members = ["main/features/init", "main/features/shell", "main/features/pkg"]
 # bin/ is Linux/musl-only — built separately inside WSL2:
 #   cd main/features/bin && cargo build --target x86_64-unknown-linux-musl --release
 exclude = ["main/features/bin"]

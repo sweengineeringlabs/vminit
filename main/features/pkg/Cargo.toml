@@ -1,0 +1,52 @@
+[package]
+name = "swe_vminit_pkg"
+version = "0.1.0"
+edition = "2021"
+description = "vminit package installation — initrd tar.gz + network NAR via justpkg"
+
+[lib]
+name = "swe_vminit_pkg"
+path = "src/lib.rs"
+
+[dependencies]
+swe_justpkg_pkg = { path = "../../../../justpkg/main/features/pkg", package = "swe_justpkg_pkg" }
+swe_justpkg_nix = { path = "../../../../justpkg/main/features/nix", package = "swe_justpkg_nix" }
+thiserror = "1"
+tar = "0.4"
+flate2 = "1"
+serde_json = "1"
+
+[dev-dependencies]
+tempfile = "3"
+
+[[test]]
+name = "error_int_test"
+path = "tests/error_int_test.rs"
+
+[[test]]
+name = "error_security_test"
+path = "tests/error_security_test.rs"
+
+[[test]]
+name = "installer_int_test"
+path = "tests/installer_int_test.rs"
+
+[[test]]
+name = "installer_security_test"
+path = "tests/installer_security_test.rs"
+
+[[test]]
+name = "initrd_int_test"
+path = "tests/initrd_int_test.rs"
+
+[[test]]
+name = "initrd_security_test"
+path = "tests/initrd_security_test.rs"
+
+[[test]]
+name = "network_int_test"
+path = "tests/network_int_test.rs"
+
+[[test]]
+name = "network_security_test"
+path = "tests/network_security_test.rs"
