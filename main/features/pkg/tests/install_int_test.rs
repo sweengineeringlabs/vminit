@@ -3,7 +3,7 @@ use swe_vminit_pkg::run_install_step;
 #[test]
 fn test_run_install_step_empty_packages_does_not_panic() {
     let pkg_dir = tempfile::tempdir().unwrap();
-    run_install_step(&[], pkg_dir.path(), None, None, None);
+    run_install_step(&[], pkg_dir.path(), None, None, None, "https://cache.nixos.org");
 }
 
 #[test]
@@ -16,6 +16,7 @@ fn test_run_install_step_package_absent_from_initrd_no_manifest_skips_without_pa
         None,
         None,
         Some(dest.path()),
+        "https://cache.nixos.org",
     );
     assert!(
         dest.path().read_dir().unwrap().next().is_none(),
@@ -55,6 +56,7 @@ fn test_run_install_step_initrd_package_extracted_to_dest() {
         None,
         None,
         Some(dest.path()),
+        "https://cache.nixos.org",
     );
 
     assert!(

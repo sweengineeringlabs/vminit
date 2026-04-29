@@ -99,6 +99,7 @@ mod tests_parse {
 pub(crate) struct NetworkInstaller<'a> {
     pub(crate) http: &'a dyn swe_justpkg_pkg::HttpClient,
     pub(crate) manifest: NetworkManifest,
+    pub(crate) cache_base: &'a str,
 }
 
 impl<'a> PackageInstaller for NetworkInstaller<'a> {
@@ -115,7 +116,7 @@ impl<'a> PackageInstaller for NetworkInstaller<'a> {
         // guest at /nix/store/<hash>-<name>/ because:
         //   - without rootfs: dest_dir = "/", store paths appear at /nix/store/
         //   - with rootfs: dest_dir = <rootfs>, chroot makes them at /nix/store/
-        NixFetcher { http: self.http }
+        NixFetcher { http: self.http, cache_base: self.cache_base }
             .build_store_path(&store_path, dest_dir)
             .map_err(|e| PackageError::NetworkFailed {
                 name: name.to_string(),

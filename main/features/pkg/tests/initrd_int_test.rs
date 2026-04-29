@@ -63,6 +63,7 @@ fn test_install_with_valid_tar_gz_extracts_file_to_dest_dir() {
         None,
         None,
         Some(dest_dir.path()),
+        "https://cache.nixos.org",
     );
 
     let extracted = std::fs::read(dest_dir.path().join("hello.txt")).unwrap();
@@ -85,6 +86,7 @@ fn test_install_with_multiple_files_in_archive_extracts_all() {
         None,
         None,
         Some(dest_dir.path()),
+        "https://cache.nixos.org",
     );
 
     assert_eq!(
@@ -118,6 +120,7 @@ fn test_install_when_archive_does_not_exist_returns_archive_not_found() {
         None,
         None,
         Some(dest_dir.path()),
+        "https://cache.nixos.org",
     );
 
     // dest_dir must remain empty (nothing extracted).
@@ -145,6 +148,7 @@ fn test_extract_preserves_file_contents_exactly() {
         None,
         None,
         Some(dest_dir.path()),
+        "https://cache.nixos.org",
     );
 
     let extracted = std::fs::read(dest_dir.path().join("binary.bin")).unwrap();
@@ -161,7 +165,7 @@ fn test_run_install_step_with_empty_packages_list_does_nothing() {
     let dest_dir = TempDir::new().unwrap();
 
     // Must not panic; dest_dir stays empty.
-    run_install_step(&[], packages_dir.path(), None, None, Some(dest_dir.path()));
+    run_install_step(&[], packages_dir.path(), None, None, Some(dest_dir.path()), "https://cache.nixos.org");
 
     let entries: Vec<_> = std::fs::read_dir(dest_dir.path()).unwrap().collect();
     assert!(entries.is_empty());

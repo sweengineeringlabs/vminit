@@ -78,6 +78,28 @@ fn test_parse_config_empty_text_returns_defaults() {
     assert!(cfg.packages.is_empty());
     assert_eq!(cfg.signal_mode, SignalMode::Serial);
     assert_eq!(cfg.manifest_path, None, "manifest_path must default to None");
+    assert_eq!(
+        cfg.cache_base, "https://cache.nixos.org",
+        "cache_base must default to the public Nix cache"
+    );
+}
+
+#[test]
+fn test_parse_config_cache_base_is_set() {
+    let cfg = parse_config("cache_base=https://my.company.cache.example\n");
+    assert_eq!(
+        cfg.cache_base, "https://my.company.cache.example",
+        "cache_base= must override the default binary cache URL"
+    );
+}
+
+#[test]
+fn test_parse_config_cache_base_absent_keeps_default() {
+    let cfg = parse_config("install=curl\ninteractive=1\n");
+    assert_eq!(
+        cfg.cache_base, "https://cache.nixos.org",
+        "cache_base must remain default when cache_base= key is absent"
+    );
 }
 
 #[test]

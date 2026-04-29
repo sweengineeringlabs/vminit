@@ -83,6 +83,7 @@ fn test_archive_entry_with_dotdot_path_is_rejected() {
         None,
         None,
         Some(dest_dir.path()),
+        "https://cache.nixos.org",
     );
 
     // The escaped file must not exist anywhere above dest_dir.
@@ -116,6 +117,7 @@ fn test_archive_entry_with_absolute_path_is_rejected() {
         None,
         None,
         Some(dest_dir.path()),
+        "https://cache.nixos.org",
     );
 
     // dest_dir must be empty — the absolute-path entry must be rejected.
@@ -145,6 +147,7 @@ fn test_archive_entry_with_null_byte_in_name_does_not_panic() {
         None,
         None,
         Some(dest_dir.path()),
+        "https://cache.nixos.org",
     );
 }
 
@@ -165,5 +168,6 @@ fn test_very_large_number_of_packages_does_not_panic() {
         None,
         None,
         Some(dest_dir.path()),
+        "https://cache.nixos.org",
     );
 }

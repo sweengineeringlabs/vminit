@@ -37,6 +37,7 @@ fn test_manifest_with_path_traversal_in_package_name_does_not_panic() {
         Some(manifest),
         Some(&http),
         Some(dest_dir.path()),
+        "https://cache.nixos.org",
     );
 
     // /etc/passwd must not have been modified (we can't assert it was unchanged,
@@ -65,6 +66,7 @@ fn test_manifest_with_10000_entries_parses_without_panic() {
         Some(&manifest),
         Some(&http),
         Some(dest_dir.path()),
+        "https://cache.nixos.org",
     );
 }
 
@@ -81,6 +83,7 @@ fn test_empty_manifest_json_does_not_panic_on_install() {
         Some(r#"{"packages":{}}"#),
         Some(&http),
         Some(dest_dir.path()),
+        "https://cache.nixos.org",
     );
     // Must not panic — test passes if we reach this line.
 }

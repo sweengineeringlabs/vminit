@@ -43,6 +43,7 @@ fn test_network_installer_name_not_in_manifest_returns_not_in_manifest() {
         Some(MANIFEST_ONE),
         Some(&http),
         Some(dest_dir.path()),
+        "https://cache.nixos.org",
     );
 
     // dest_dir stays empty (nothing was installed).
@@ -65,6 +66,7 @@ fn test_network_installer_with_http_stub_returning_error_returns_network_failed(
         Some(MANIFEST_ONE),
         Some(&http),
         Some(dest_dir.path()),
+        "https://cache.nixos.org",
     );
 
     // Nothing must be written.
@@ -85,6 +87,7 @@ fn test_run_install_step_with_none_http_returns_without_panicking() {
         Some(MANIFEST_ONE),
         None, // <-- no HTTP client
         Some(dest_dir.path()),
+        "https://cache.nixos.org",
     );
 }
 
@@ -102,6 +105,7 @@ fn test_network_installer_with_empty_manifest_returns_not_in_manifest_for_any_na
         Some(MANIFEST_EMPTY),
         Some(&http),
         Some(dest_dir.path()),
+        "https://cache.nixos.org",
     );
 
     let entries: Vec<_> = std::fs::read_dir(dest_dir.path()).unwrap().collect();

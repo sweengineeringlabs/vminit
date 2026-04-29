@@ -1,0 +1,14 @@
+# vminit guest agent configuration
+#
+# This file is embedded in the initrd and read by vminit at boot.
+# Format mirrors /etc/xkvm.conf but uses TOML for structured overrides.
+#
+# Location search order (XDG Base Directory Specification — Linux guest):
+#   1. $XDG_CONFIG_HOME/vminit/application.toml  (default: ~/.config)
+#   2. Each dir in $XDG_CONFIG_DIRS/vminit/application.toml (default: /etc/xdg)
+#   First found wins; falls back to compiled-in defaults if none exist.
+
+[nix]
+# Nix binary cache base URL for network package installation.
+# Override to use a private cache: cache_base = "https://cache.company.internal"
+cache_base = "https://cache.nixos.org"

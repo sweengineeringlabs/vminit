@@ -13,6 +13,7 @@
 //!   kali_mode=1
 //!   signal_mode=serial|shared_memory
 //!   manifest=/etc/packages.json
+//!   cache_base=https://cache.nixos.org
 
 use crate::api::config::{InitConfig, SignalMode, VolumeSpec};
 
@@ -57,6 +58,10 @@ pub fn parse_config(text: &str) -> InitConfig {
             };
         } else if let Some(val) = line.strip_prefix("manifest=") {
             config.manifest_path = Some(val.to_string());
+        } else if let Some(val) = line.strip_prefix("cache_base=") {
+            if !val.is_empty() {
+                config.cache_base = val.to_string();
+            }
         }
     }
 

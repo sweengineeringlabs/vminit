@@ -20,6 +20,7 @@ pub fn run_install_step(
     manifest_text: Option<&str>,
     http: Option<&dyn swe_justpkg_pkg::HttpClient>,
     dest_dir: Option<&Path>,
+    cache_base: &str,
 ) {
     if packages.is_empty() {
         return;
@@ -71,6 +72,7 @@ pub fn run_install_step(
                     manifest: NetworkManifest {
                         entries: manifest.entries.clone(),
                     },
+                    cache_base,
                 };
                 match network.install(pkg, &effective_dest) {
                     Ok(()) => {
