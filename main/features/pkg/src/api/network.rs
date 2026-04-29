@@ -1,4 +1,4 @@
-/// Provides SRI hash lookup for a named package from a manifest.
+/// Provides store path lookup for a named package from a manifest.
 pub trait ManifestLookup {
-    fn get_sri(&self, name: &str) -> Option<&str>;
+    fn get_store_path(&self, name: &str) -> Option<&str>;
 }

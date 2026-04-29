@@ -20,9 +20,9 @@ impl HttpClient for ErrorHttpClient {
     }
 }
 
-/// Minimal manifest JSON with one known entry.
+/// Minimal manifest JSON with one known entry (store path format).
 const MANIFEST_ONE: &str =
-    r#"{"packages":{"curl":"sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}}"#;
+    r#"{"packages":{"curl":"/nix/store/hm8l3fvhzpmw3ilkxp0lns6cvb4wd4g2-curl-8.5.0"}}"#;
 /// Empty manifest JSON.
 const MANIFEST_EMPTY: &str = r#"{"packages":{}}"#;
 
