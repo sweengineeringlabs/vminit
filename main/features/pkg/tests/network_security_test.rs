@@ -1,15 +1,21 @@
-use swe_vminit_pkg::run_install_step;
 use swe_justpkg_pkg::{HttpClient, JustpkgError};
+use swe_vminit_pkg::run_install_step;
 use tempfile::TempDir;
 
 struct ErrorHttpClient;
 
 impl HttpClient for ErrorHttpClient {
     fn get_bytes(&self, url: &str) -> Result<Vec<u8>, JustpkgError> {
-        Err(JustpkgError::Http { url: url.to_string(), status: 503 })
+        Err(JustpkgError::Http {
+            url: url.to_string(),
+            status: 503,
+        })
     }
     fn get_stream(&self, url: &str, _dest: &mut dyn std::io::Write) -> Result<u64, JustpkgError> {
-        Err(JustpkgError::Http { url: url.to_string(), status: 503 })
+        Err(JustpkgError::Http {
+            url: url.to_string(),
+            status: 503,
+        })
     }
 }
 

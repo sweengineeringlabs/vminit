@@ -1,5 +1,5 @@
-use swe_vminit_pkg::run_install_step;
 use swe_justpkg_pkg::{HttpClient, JustpkgError};
+use swe_vminit_pkg::run_install_step;
 use tempfile::TempDir;
 
 /// HTTP stub that always returns a network error.
@@ -21,7 +21,8 @@ impl HttpClient for ErrorHttpClient {
 }
 
 /// Minimal manifest JSON with one known entry.
-const MANIFEST_ONE: &str = r#"{"packages":{"curl":"sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}}"#;
+const MANIFEST_ONE: &str =
+    r#"{"packages":{"curl":"sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}}"#;
 /// Empty manifest JSON.
 const MANIFEST_EMPTY: &str = r#"{"packages":{}}"#;
 

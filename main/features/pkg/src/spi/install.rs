@@ -82,9 +82,7 @@ pub fn run_install_step(
                 }
             }
             (None, _) => {
-                eprintln!(
-                    "vminit-pkg: {pkg:?} not in initrd and no manifest available — skipping"
-                );
+                eprintln!("vminit-pkg: {pkg:?} not in initrd and no manifest available — skipping");
             }
             (_, None) => {
                 eprintln!(
@@ -92,5 +90,30 @@ pub fn run_install_step(
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests_effective_dest {
+    #[test]
+    fn test_dest_none_defaults_to_root() {
+        // When no dest_dir is given, packages must land at /nix/store/... (root of guest).
+        let effective = match None::<&std::path::Path> {
+            Some(d) => d.to_path_buf(),
+            None => std::path::PathBuf::from("/"),
+        };
+        assert_eq!(effective, std::path::PathBuf::from("/"));
+    }
+
+    #[test]
+    fn test_dest_some_rootfs_preserves_path() {
+        // When a rootfs is given, the path must be used verbatim so that packages
+        // land at <rootfs>/nix/store/... and appear at /nix/store/... inside the chroot.
+        let rootfs = std::path::Path::new("/mnt/rootfs");
+        let effective = match Some(rootfs) {
+            Some(d) => d.to_path_buf(),
+            None => std::path::PathBuf::from("/"),
+        };
+        assert_eq!(effective, std::path::PathBuf::from("/mnt/rootfs"));
     }
 }

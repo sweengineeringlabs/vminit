@@ -20,7 +20,9 @@ fn test_installer_does_not_panic_on_null_byte_name() {
     // Bug caught: installer panicking when a package name contains a null
     // byte (e.g. from a corrupted manifest).
     let calls = Arc::new(Mutex::new(Vec::new()));
-    let installer = PanicGuardInstaller { calls: Arc::clone(&calls) };
+    let installer = PanicGuardInstaller {
+        calls: Arc::clone(&calls),
+    };
     // Must not panic — even with a name containing a null byte.
     let _ = installer.install("evil\x00pkg", Path::new("/tmp"));
 }
@@ -29,7 +31,9 @@ fn test_installer_does_not_panic_on_null_byte_name() {
 fn test_installer_does_not_panic_on_empty_name() {
     // Bug caught: install("", ...) panicking on empty-string package name.
     let calls = Arc::new(Mutex::new(Vec::new()));
-    let installer = PanicGuardInstaller { calls: Arc::clone(&calls) };
+    let installer = PanicGuardInstaller {
+        calls: Arc::clone(&calls),
+    };
     let _ = installer.install("", Path::new("/tmp"));
     // Should have been called once (recording stub does not reject empty names)
     assert_eq!(calls.lock().unwrap().len(), 1);
@@ -39,7 +43,9 @@ fn test_installer_does_not_panic_on_empty_name() {
 fn test_installer_does_not_panic_on_unicode_name() {
     // Bug caught: byte-oriented name handling panicking on multibyte characters.
     let calls = Arc::new(Mutex::new(Vec::new()));
-    let installer = PanicGuardInstaller { calls: Arc::clone(&calls) };
+    let installer = PanicGuardInstaller {
+        calls: Arc::clone(&calls),
+    };
     let _ = installer.install("pàckàge-名前", Path::new("/tmp"));
     assert_eq!(calls.lock().unwrap().len(), 1);
 }

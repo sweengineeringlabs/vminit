@@ -94,7 +94,10 @@ fn test_archive_entry_with_dotdot_path_is_rejected() {
 
     // dest_dir itself must be empty — the entry was rejected.
     let entries: Vec<_> = std::fs::read_dir(dest_dir.path()).unwrap().collect();
-    assert!(entries.is_empty(), "dest_dir must be empty after rejected traversal entry");
+    assert!(
+        entries.is_empty(),
+        "dest_dir must be empty after rejected traversal entry"
+    );
 }
 
 #[test]

@@ -62,10 +62,13 @@ pub(crate) fn extract_tar_gz<R: std::io::Read>(
     let decoder = GzDecoder::new(reader);
     let mut archive = Archive::new(decoder);
 
-    for entry_result in archive.entries().map_err(|e| PackageError::ExtractionFailed {
-        name: pkg_name.to_string(),
-        reason: e.to_string(),
-    })? {
+    for entry_result in archive
+        .entries()
+        .map_err(|e| PackageError::ExtractionFailed {
+            name: pkg_name.to_string(),
+            reason: e.to_string(),
+        })?
+    {
         let mut entry = entry_result.map_err(|e| PackageError::ExtractionFailed {
             name: pkg_name.to_string(),
             reason: e.to_string(),
@@ -81,13 +84,12 @@ pub(crate) fn extract_tar_gz<R: std::io::Read>(
             .into_owned();
 
         // Validate: reject path traversal, absolute paths, null bytes.
-        let dest_path =
-            swe_justpkg_pkg::safe_path_join(dest_dir, &raw_path).map_err(|e| {
-                PackageError::ExtractionFailed {
-                    name: pkg_name.to_string(),
-                    reason: e.to_string(),
-                }
-            })?;
+        let dest_path = swe_justpkg_pkg::safe_path_join(dest_dir, &raw_path).map_err(|e| {
+            PackageError::ExtractionFailed {
+                name: pkg_name.to_string(),
+                reason: e.to_string(),
+            }
+        })?;
 
         let entry_type = entry.header().entry_type();
         if entry_type.is_dir() {
@@ -128,7 +130,10 @@ mod tests {
     fn test_new_stores_packages_dir() {
         let dir = PathBuf::from("/packages");
         let inst = InitrdInstaller::new(dir.clone());
-        assert_eq!(inst.packages_dir, dir, "packages_dir must match constructor arg");
+        assert_eq!(
+            inst.packages_dir, dir,
+            "packages_dir must match constructor arg"
+        );
     }
 
     #[test]

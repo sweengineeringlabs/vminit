@@ -6,7 +6,7 @@
 //!   3. Mount 9P volume shares
 //!   4. Mount rootfs from /dev/vda (if present)
 //!   5. DHCP network configuration
-//!   6. Install packages from initrd
+//!   6. Install packages from initrd / Nix binary cache → /nix/store/<hash>-<name>/
 //!   7. Apply [[files]] overlay from /overlay/.manifest
 //!   8. Chroot setup (kali_mode)
 //!   9. Apply spec.env to process environment

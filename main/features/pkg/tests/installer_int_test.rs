@@ -33,7 +33,9 @@ impl PackageInstaller for FailingInstaller {
 fn test_custom_installer_is_called_for_each_package() {
     // Bug caught: install loop skipping packages silently.
     let calls = Arc::new(Mutex::new(Vec::new()));
-    let installer = RecordingInstaller { calls: Arc::clone(&calls) };
+    let installer = RecordingInstaller {
+        calls: Arc::clone(&calls),
+    };
     let dest = std::path::Path::new("/tmp");
 
     let packages = ["curl", "jq", "busybox"];
@@ -48,7 +50,9 @@ fn test_custom_installer_is_called_for_each_package() {
 #[test]
 fn test_package_installer_returning_error_propagates_correctly() {
     // Bug caught: error swallowed or converted to wrong variant.
-    let installer = FailingInstaller { reason: "disk full".to_string() };
+    let installer = FailingInstaller {
+        reason: "disk full".to_string(),
+    };
     let result = installer.install("gzip", Path::new("/tmp"));
     let err = result.unwrap_err();
     match err {
@@ -64,7 +68,9 @@ fn test_package_installer_returning_error_propagates_correctly() {
 fn test_package_installer_install_called_with_correct_name() {
     // Bug caught: name argument mangled or trimmed before being passed to install.
     let calls = Arc::new(Mutex::new(Vec::new()));
-    let installer = RecordingInstaller { calls: Arc::clone(&calls) };
+    let installer = RecordingInstaller {
+        calls: Arc::clone(&calls),
+    };
     let expected_name = "python3.11-minimal";
     installer.install(expected_name, Path::new("/tmp")).unwrap();
     assert_eq!(calls.lock().unwrap()[0], expected_name);

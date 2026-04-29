@@ -54,8 +54,14 @@ fn test_extraction_failed_display_includes_name_and_reason() {
         reason: "unexpected EOF".to_string(),
     };
     let text = err.to_string();
-    assert!(text.contains("python3"), "display must include name, got: {text:?}");
-    assert!(text.contains("unexpected EOF"), "display must include reason, got: {text:?}");
+    assert!(
+        text.contains("python3"),
+        "display must include name, got: {text:?}"
+    );
+    assert!(
+        text.contains("unexpected EOF"),
+        "display must include reason, got: {text:?}"
+    );
 }
 
 #[test]

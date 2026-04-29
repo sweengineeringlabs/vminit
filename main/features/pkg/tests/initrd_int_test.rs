@@ -18,7 +18,9 @@ fn make_tar_gz(filename: &str, content: &[u8]) -> Vec<u8> {
     header.set_size(content.len() as u64);
     header.set_mode(0o644);
     header.set_cksum();
-    tar_builder.append_data(&mut header, filename, content).unwrap();
+    tar_builder
+        .append_data(&mut header, filename, content)
+        .unwrap();
 
     let encoder = tar_builder.into_inner().unwrap();
     encoder.finish().unwrap()
@@ -35,7 +37,9 @@ fn make_tar_gz_multi(files: &[(&str, &[u8])]) -> Vec<u8> {
         header.set_size(content.len() as u64);
         header.set_mode(0o644);
         header.set_cksum();
-        tar_builder.append_data(&mut header, filename, *content).unwrap();
+        tar_builder
+            .append_data(&mut header, filename, *content)
+            .unwrap();
     }
 
     let encoder = tar_builder.into_inner().unwrap();
@@ -71,11 +75,8 @@ fn test_install_with_multiple_files_in_archive_extracts_all() {
     let packages_dir = TempDir::new().unwrap();
     let dest_dir = TempDir::new().unwrap();
 
-    let archive_bytes = make_tar_gz_multi(&[
-        ("a.txt", b"aaa"),
-        ("b.txt", b"bbb"),
-        ("c.txt", b"ccc"),
-    ]);
+    let archive_bytes =
+        make_tar_gz_multi(&[("a.txt", b"aaa"), ("b.txt", b"bbb"), ("c.txt", b"ccc")]);
     std::fs::write(packages_dir.path().join("multi.tar.gz"), &archive_bytes).unwrap();
 
     run_install_step(
@@ -86,9 +87,18 @@ fn test_install_with_multiple_files_in_archive_extracts_all() {
         Some(dest_dir.path()),
     );
 
-    assert_eq!(std::fs::read(dest_dir.path().join("a.txt")).unwrap(), b"aaa");
-    assert_eq!(std::fs::read(dest_dir.path().join("b.txt")).unwrap(), b"bbb");
-    assert_eq!(std::fs::read(dest_dir.path().join("c.txt")).unwrap(), b"ccc");
+    assert_eq!(
+        std::fs::read(dest_dir.path().join("a.txt")).unwrap(),
+        b"aaa"
+    );
+    assert_eq!(
+        std::fs::read(dest_dir.path().join("b.txt")).unwrap(),
+        b"bbb"
+    );
+    assert_eq!(
+        std::fs::read(dest_dir.path().join("c.txt")).unwrap(),
+        b"ccc"
+    );
 }
 
 #[test]
@@ -112,7 +122,10 @@ fn test_install_when_archive_does_not_exist_returns_archive_not_found() {
 
     // dest_dir must remain empty (nothing extracted).
     let entries: Vec<_> = std::fs::read_dir(dest_dir.path()).unwrap().collect();
-    assert!(entries.is_empty(), "dest_dir must be empty when archive is missing");
+    assert!(
+        entries.is_empty(),
+        "dest_dir must be empty when archive is missing"
+    );
 }
 
 #[test]
@@ -135,7 +148,10 @@ fn test_extract_preserves_file_contents_exactly() {
     );
 
     let extracted = std::fs::read(dest_dir.path().join("binary.bin")).unwrap();
-    assert_eq!(extracted, binary_content, "binary content must be preserved byte-for-byte");
+    assert_eq!(
+        extracted, binary_content,
+        "binary content must be preserved byte-for-byte"
+    );
 }
 
 #[test]

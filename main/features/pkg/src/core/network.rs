@@ -33,17 +33,13 @@ impl NetworkManifest {
             .get("packages")
             .and_then(|v| v.as_object())
             .ok_or_else(|| {
-                PackageError::ManifestParse(
-                    "missing or non-object \"packages\" field".to_string(),
-                )
+                PackageError::ManifestParse("missing or non-object \"packages\" field".to_string())
             })?;
 
         let mut entries = HashMap::with_capacity(packages_obj.len());
         for (k, v) in packages_obj {
             let sri = v.as_str().ok_or_else(|| {
-                PackageError::ManifestParse(format!(
-                    "package {k:?} has non-string SRI value"
-                ))
+                PackageError::ManifestParse(format!("package {k:?} has non-string SRI value"))
             })?;
             entries.insert(k.clone(), sri.to_string());
         }
@@ -62,7 +58,11 @@ mod tests_parse {
         let m = NetworkManifest::parse(json).unwrap();
         assert_eq!(m.get_sri("curl"), Some("sha256-abc"), "curl SRI must match");
         assert_eq!(m.get_sri("git"), Some("sha256-def"), "git SRI must match");
-        assert_eq!(m.get_sri("absent"), None, "unknown package must return None");
+        assert_eq!(
+            m.get_sri("absent"),
+            None,
+            "unknown package must return None"
+        );
     }
 
     #[test]
@@ -106,6 +106,10 @@ impl<'a> PackageInstaller for NetworkInstaller<'a> {
             reason: format!("synthetic FlakeLock parse failed: {e}"),
         })?;
 
+        // NixFetcher::build extracts each NAR to <dest_dir>/nix/store/<hash>-<name>/.
+        // Packages are visible inside the guest at /nix/store/<hash>-<name>/ because:
+        //   - without rootfs: dest_dir = "/", store paths appear directly at /nix/store/
+        //   - with rootfs: dest_dir = <rootfs>, chroot makes them appear at /nix/store/
         NixFetcher { http: self.http }
             .build(&lock, dest_dir)
             .map_err(|e| PackageError::NetworkFailed {
