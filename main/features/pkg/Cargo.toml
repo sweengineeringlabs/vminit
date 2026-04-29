@@ -50,3 +50,7 @@ path = "tests/network_int_test.rs"
 [[test]]
 name = "network_security_test"
 path = "tests/network_security_test.rs"
+
+[[test]]
+name = "install_int_test"
+path = "tests/install_int_test.rs"

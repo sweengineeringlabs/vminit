@@ -4,6 +4,7 @@ use flate2::read::GzDecoder;
 use tar::Archive;
 
 use crate::api::error::PackageError;
+use crate::api::initrd::PackagesSource;
 use crate::api::installer::PackageInstaller;
 
 /// Extracts `/packages/<name>.tar.gz` into `dest_dir` using pure-Rust
@@ -24,9 +25,15 @@ impl InitrdInstaller {
     }
 }
 
+impl PackagesSource for InitrdInstaller {
+    fn archive_path(&self, name: &str) -> PathBuf {
+        self.packages_dir.join(format!("{name}.tar.gz"))
+    }
+}
+
 impl PackageInstaller for InitrdInstaller {
     fn install(&self, name: &str, dest_dir: &Path) -> Result<(), PackageError> {
-        let archive_path = self.packages_dir.join(format!("{name}.tar.gz"));
+        let archive_path = self.archive_path(name);
 
         let file = std::fs::File::open(&archive_path).map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
@@ -110,4 +117,29 @@ pub(crate) fn extract_tar_gz<R: std::io::Read>(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn test_new_stores_packages_dir() {
+        let dir = PathBuf::from("/packages");
+        let inst = InitrdInstaller::new(dir.clone());
+        assert_eq!(inst.packages_dir, dir, "packages_dir must match constructor arg");
+    }
+
+    #[test]
+    fn test_extract_tar_gz_empty_archive_returns_ok() {
+        let gz_bytes = {
+            let enc = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+            let mut builder = tar::Builder::new(enc);
+            builder.finish().unwrap();
+            builder.into_inner().unwrap().finish().unwrap()
+        };
+        let dest = tempfile::tempdir().unwrap();
+        extract_tar_gz("test-pkg", Cursor::new(gz_bytes), dest.path()).unwrap();
+    }
 }

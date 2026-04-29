@@ -5,12 +5,19 @@ use swe_justpkg_nix::{FlakeLock, NixFetcher};
 
 use crate::api::error::PackageError;
 use crate::api::installer::PackageInstaller;
+use crate::api::network::ManifestLookup;
 
 /// A parsed manifest: `{"packages": {"name": "sha256-<sri>", ...}}`.
 #[derive(Debug)]
 pub(crate) struct NetworkManifest {
     /// Maps package name → SRI hash (`sha256-<base64>`).
     pub(crate) entries: HashMap<String, String>,
+}
+
+impl ManifestLookup for NetworkManifest {
+    fn get_sri(&self, name: &str) -> Option<&str> {
+        self.entries.get(name).map(String::as_str)
+    }
 }
 
 impl NetworkManifest {
@@ -42,6 +49,29 @@ impl NetworkManifest {
         }
 
         Ok(Self { entries })
+    }
+}
+
+#[cfg(test)]
+mod tests_parse {
+    use super::*;
+
+    #[test]
+    fn test_parse() {
+        let json = r#"{"packages":{"curl":"sha256-abc","git":"sha256-def"}}"#;
+        let m = NetworkManifest::parse(json).unwrap();
+        assert_eq!(m.get_sri("curl"), Some("sha256-abc"), "curl SRI must match");
+        assert_eq!(m.get_sri("git"), Some("sha256-def"), "git SRI must match");
+        assert_eq!(m.get_sri("absent"), None, "unknown package must return None");
+    }
+
+    #[test]
+    fn test_parse_malformed_json_returns_manifest_parse_error() {
+        let err = NetworkManifest::parse("{not valid json}").unwrap_err();
+        assert!(
+            matches!(err, PackageError::ManifestParse(_)),
+            "malformed JSON must return ManifestParse error"
+        );
     }
 }
 
