@@ -67,49 +67,48 @@ pub fn run_entrypoint(args: &[String], env: &[(String, String)], rootfs: Option<
 }
 
 pub fn run_interactive_shell(env: &[(String, String)], rootfs: Option<&str>) -> i32 {
-    if let Some(root) = rootfs {
-        let tty_fd = unsafe { ffi::open(b"/dev/ttyS0\0".as_ptr(), ffi::O_RDWR, 0) };
-        if tty_fd < 0 { serial::log("failed to open /dev/ttyS0"); return 1; }
-
+    let tty_fd = unsafe { ffi::open(b"/dev/ttyS0\0".as_ptr(), ffi::O_RDWR, 0) };
+    if tty_fd >= 0 {
         unsafe {
             ffi::setsid();
             ffi::ioctl(tty_fd, ffi::TIOCSCTTY, 0);
             ffi::dup2(tty_fd, 0); ffi::dup2(tty_fd, 1); ffi::dup2(tty_fd, 2);
             if tty_fd > 2 { ffi::close(tty_fd); }
         }
-
-        let root_cstr = format!("{}\0", root);
-        unsafe { ffi::chroot(root_cstr.as_ptr()); ffi::chdir(b"/\0".as_ptr()); }
-
-        let mut term_env = env.to_vec();
-        term_env.push(("TERM".to_string(), "linux".to_string()));
-        term_env.push(("PATH".to_string(), "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string()));
-
-        let (env_bufs, env_ptrs) = build_envp(&term_env);
-
-        let bash = b"/bin/bash\0";
-        let bash_arg0 = b"/bin/bash\0";
-        let bash_flag = b"-l\0";
-        let bash_argv: [*const u8; 3] = [bash_arg0.as_ptr(), bash_flag.as_ptr(), core::ptr::null()];
-        unsafe { ffi::execve(bash.as_ptr(), bash_argv.as_ptr(), env_ptrs.as_ptr()); }
-
-        let sh = b"/bin/sh\0";
-        let sh_arg0 = b"/bin/sh\0";
-        let sh_argv: [*const u8; 2] = [sh_arg0.as_ptr(), core::ptr::null()];
-        unsafe { ffi::execve(sh.as_ptr(), sh_argv.as_ptr(), env_ptrs.as_ptr()); }
-
-        serial::log("no /bin/bash or /bin/sh in rootfs, using built-in shell");
-        drop(env_bufs);
     }
 
+    if let Some(root) = rootfs {
+        let root_cstr = format!("{}\0", root);
+        unsafe { ffi::chroot(root_cstr.as_ptr()); ffi::chdir(b"/\0".as_ptr()); }
+    }
+
+    let mut term_env = env.to_vec();
+    term_env.push(("TERM".to_string(), "linux".to_string()));
+    term_env.push(("PATH".to_string(), "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string()));
+
+    let (env_bufs, env_ptrs) = build_envp(&term_env);
+
+    let bash = b"/bin/bash\0";
+    let bash_arg0 = b"/bin/bash\0";
+    let bash_flag = b"-l\0";
+    let bash_argv: [*const u8; 3] = [bash_arg0.as_ptr(), bash_flag.as_ptr(), core::ptr::null()];
+    unsafe { ffi::execve(bash.as_ptr(), bash_argv.as_ptr(), env_ptrs.as_ptr()); }
+
+    let sh = b"/bin/sh\0";
+    let sh_arg0 = b"/bin/sh\0";
+    let sh_argv: [*const u8; 2] = [sh_arg0.as_ptr(), core::ptr::null()];
+    unsafe { ffi::execve(sh.as_ptr(), sh_argv.as_ptr(), env_ptrs.as_ptr()); }
+
+    serial::log("no /bin/bash or /bin/sh in rootfs, using built-in shell");
+    drop(env_bufs);
     swe_vminit_shell::repl::run(env)
 }
 
 pub fn start_agent() {
-    if !unsafe { ffi::path_exists(b"/bin/vminit-agent\0".as_ptr()) } { return; }
+    if !unsafe { ffi::path_exists(b"/bin/xkvm-agent\0".as_ptr()) } { return; }
     let pid = unsafe { ffi::fork() };
     if pid == 0 {
-        let agent = b"/bin/vminit-agent\0";
+        let agent = b"/bin/xkvm-agent\0";
         let args: [*const u8; 2] = [agent.as_ptr(), core::ptr::null()];
         unsafe { ffi::execv(agent.as_ptr(), args.as_ptr()); }
         unsafe { ffi::exit_group(1) }

@@ -160,7 +160,14 @@ fn main_inner() {
 
     serial::signal_ready(cfg.signal_mode);
 
-    let exit_code = if cfg.interactive {
+    let exit_code = if cfg.start_agent && cfg.entrypoint.is_empty() {
+        // Agent is handling the exec command. Keep the VM alive so the daemon
+        // can receive MSG_EXIT from the agent. The daemon will drop the VM
+        // immediately after getting the result, killing this process.
+        loop {
+            unsafe { ffi::nanosleep_ms(5000); }
+        }
+    } else if cfg.interactive {
         exec::run_interactive_shell(&cfg.env, rootfs.as_deref())
     } else {
         exec::run_entrypoint(&cfg.entrypoint, &cfg.env, rootfs.as_deref())
