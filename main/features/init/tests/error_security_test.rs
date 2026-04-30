@@ -3,12 +3,11 @@ use swe_vminit_init::{ParseError, VmInitError};
 #[test]
 fn test_config_read_error_message_has_consistent_prefix_regardless_of_io_message() {
     for msg in &["secret internal detail", "ENOMEM", "kernel panic", "stack trace: 0x..."] {
-        let io_err = std::io::Error::new(std::io::ErrorKind::Other, *msg);
-        let err = VmInitError::from(io_err);
+        let err = VmInitError::ConfigRead(msg.to_string());
         let display = err.to_string();
         assert!(
             display.starts_with("config read error:"),
-            "error must have consistent prefix regardless of io message, got: {display}"
+            "error must have consistent prefix regardless of internal message, got: {display}"
         );
     }
 }

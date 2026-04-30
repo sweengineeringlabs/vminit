@@ -1,4 +1,4 @@
-pub use crate::api::config::{InitConfig, SignalMode, VolumeSpec};
+pub use crate::api::config::{GuestNetworkMode, InitConfig, SignalMode, VolumeSpec};
 pub use crate::api::error::VmInitError;
 pub use crate::api::overlay::{OverlayEntry, OverlayManifest, ParseError};
 pub use crate::spi::config::parse_config;

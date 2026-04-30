@@ -25,10 +25,10 @@ fn test_parse_config_volume_read_write_flag() {
 
 #[test]
 fn test_parse_config_boolean_flags() {
-    let cfg = parse_config("interactive=1\nstart_agent=1\nkali_mode=1\n");
+    let cfg = parse_config("interactive=1\nstart_agent=1\nmount_rootfs=1\n");
     assert!(cfg.interactive);
     assert!(cfg.start_agent);
-    assert!(cfg.kali_mode);
+    assert!(cfg.mount_rootfs);
 }
 
 #[test]
@@ -36,7 +36,7 @@ fn test_parse_config_flags_default_to_false() {
     let cfg = parse_config("");
     assert!(!cfg.interactive);
     assert!(!cfg.start_agent);
-    assert!(!cfg.kali_mode);
+    assert!(!cfg.mount_rootfs);
 }
 
 #[test]

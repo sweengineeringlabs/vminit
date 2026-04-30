@@ -1,12 +1,15 @@
 //! Filesystem mounting for PID 1 init.
 
+#[cfg(not(feature = "packages"))]
+use alloc::string::{String, ToString};
+
 use crate::ffi;
 use crate::serial;
 use swe_vminit_init::{OverlayEntry, OverlayManifest, VolumeSpec};
 
-const OVERLAY_MANIFEST_PATH: &str = "/overlay/.manifest";
+const OVERLAY_MANIFEST_PATH: &[u8] = b"/overlay/.manifest\0";
 const OVERLAY_PREFIX: &str = "/overlay";
-const ROOTFS_SENTINEL: &str = "/rootfs/.vminit-rootfs-mounted";
+const ROOTFS_SENTINEL: &[u8] = b"/rootfs/.vminit-rootfs-mounted\0";
 
 fn mkdir_p(path: &[u8]) {
     unsafe { ffi::mkdir(path.as_ptr(), 0o755); }
@@ -14,7 +17,7 @@ fn mkdir_p(path: &[u8]) {
 
 fn do_mount(src: &[u8], target: &[u8], fstype: &[u8], flags: u64, data: &[u8]) -> bool {
     unsafe {
-        let data_ptr = if data.is_empty() { std::ptr::null() } else { data.as_ptr() };
+        let data_ptr = if data.is_empty() { core::ptr::null() } else { data.as_ptr() };
         ffi::mount(src.as_ptr(), target.as_ptr(), fstype.as_ptr(), flags, data_ptr) == 0
     }
 }
@@ -66,8 +69,8 @@ pub fn mount_rootfs() -> Option<String> {
     do_mount(b"proc\0", b"/rootfs/proc\0", b"proc\0", 0, b"");
     do_mount(b"sysfs\0", b"/rootfs/sys\0", b"sysfs\0", 0, b"");
     do_mount(b"devtmpfs\0", b"/rootfs/dev\0", b"devtmpfs\0", 0, b"");
-    if let Err(e) = std::fs::write(ROOTFS_SENTINEL, b"ok\n") {
-        serial::log(&format!("rootfs: failed to write sentinel: {e}"));
+    if !unsafe { ffi::write_file(ROOTFS_SENTINEL.as_ptr(), b"ok\n") } {
+        serial::log("rootfs: failed to write sentinel");
     }
     serial::log("mounted rootfs from /dev/vda");
     Some("/rootfs".to_string())
@@ -81,9 +84,15 @@ pub fn setup_chroot(rootfs: &str, volumes: &[VolumeSpec]) {
     do_mount(b"tmpfs\0", devshm.as_bytes(), b"tmpfs\0", 0, b"");
     let etc_dir = format!("{}/etc\0", rootfs);
     mkdir_p(etc_dir.as_bytes());
-    if let Ok(resolv) = std::fs::read("/etc/resolv.conf") {
-        let _ = std::fs::write(format!("{}/etc/resolv.conf", rootfs), &resolv);
+
+    // Copy /etc/resolv.conf into the chroot if it exists
+    let mut resolv_buf = [0u8; 512];
+    let n = unsafe { ffi::read_file(b"/etc/resolv.conf\0".as_ptr(), &mut resolv_buf) };
+    if n > 0 {
+        let target = format!("{}/etc/resolv.conf\0", rootfs);
+        unsafe { ffi::write_file(target.as_ptr(), &resolv_buf[..n as usize]); }
     }
+
     for vol in volumes {
         let inner = format!("{}{}\0", rootfs, vol.guest_mount);
         let outer = format!("{}\0", vol.guest_mount);
@@ -94,14 +103,19 @@ pub fn setup_chroot(rootfs: &str, volumes: &[VolumeSpec]) {
 }
 
 pub fn apply_overlay(rootfs: &str) {
-    let manifest_text = match std::fs::read_to_string(OVERLAY_MANIFEST_PATH) {
+    if !unsafe { ffi::path_exists(OVERLAY_MANIFEST_PATH.as_ptr()) } { return; }
+
+    let mut manifest_buf = vec![0u8; 65536];
+    let n = unsafe { ffi::read_file(OVERLAY_MANIFEST_PATH.as_ptr(), &mut manifest_buf) };
+    if n < 0 {
+        serial::log("overlay: failed to read manifest — skipping");
+        return;
+    }
+    let manifest_text = match String::from_utf8(manifest_buf[..n as usize].to_vec()) {
         Ok(s) => s,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
-        Err(e) => {
-            serial::log(&format!("overlay: failed to read manifest: {e} — skipping"));
-            return;
-        }
+        Err(_) => { serial::log("overlay: manifest is not valid UTF-8 — skipping"); return; }
     };
+
     let manifest = match OverlayManifest::parse(&manifest_text) {
         Ok(m) => m,
         Err(e) => {
@@ -122,17 +136,29 @@ pub fn apply_overlay(rootfs: &str) {
 }
 
 fn apply_one_overlay_entry(rootfs: &str, entry: &OverlayEntry) -> Result<(), String> {
-    let source_path = format!("{OVERLAY_PREFIX}{}", entry.dest);
+    let source_path = format!("{OVERLAY_PREFIX}{}\0", entry.dest);
     let target_path = format!("{rootfs}{}", entry.dest);
-    let payload = std::fs::read(&source_path).map_err(|e| format!("read {source_path}: {e}"))?;
+    let target_path_c = format!("{}\0", target_path);
+
+    // Read source file
+    let mut payload = vec![0u8; 16 * 1024 * 1024]; // 16 MB max overlay file
+    let n = unsafe { ffi::read_file(source_path.as_ptr(), &mut payload) };
+    if n < 0 { return Err(format!("read {source_path}: syscall failed")); }
+    payload.truncate(n as usize);
+
+    // Ensure parent directory exists
     if let Some(parent) = parent_dir_for(&target_path) { mkdir_p_chain(parent); }
-    std::fs::write(&target_path, &payload).map_err(|e| format!("write {target_path}: {e}"))?;
+
+    // Write target file
+    if !unsafe { ffi::write_file(target_path_c.as_ptr(), &payload) } {
+        return Err(format!("write {target_path}: syscall failed"));
+    }
+
     let perm_bits = entry.mode & 0o7777;
-    let target_c = format!("{}\0", target_path);
-    let chmod_rc = unsafe { ffi::chmod(target_c.as_ptr(), perm_bits) };
+    let chmod_rc = unsafe { ffi::chmod(target_path_c.as_ptr(), perm_bits) };
     if chmod_rc != 0 { return Err(format!("chmod {target_path} to {perm_bits:o} failed")); }
     if entry.uid != 0 || entry.gid != 0 {
-        let chown_rc = unsafe { ffi::chown(target_c.as_ptr(), entry.uid, entry.gid) };
+        let chown_rc = unsafe { ffi::chown(target_path_c.as_ptr(), entry.uid, entry.gid) };
         if chown_rc != 0 { return Err(format!("chown {target_path} to {}:{} failed", entry.uid, entry.gid)); }
     }
     Ok(())

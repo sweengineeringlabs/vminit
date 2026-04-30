@@ -3,6 +3,9 @@
 //! Defines the wire strings written to /dev/ttyS0 (serial mode) or
 //! the magic u32 values written to physical address 0x500 (shm mode).
 
+use alloc::format;
+use alloc::string::String;
+
 /// Serial signal indicating the guest init completed boot and is ready.
 pub const READY_SIGNAL: &str = "XIKA_READY";
 

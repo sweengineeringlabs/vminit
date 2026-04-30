@@ -7,8 +7,9 @@
 //! bits. Comments (#) and blank lines are ignored.
 //! emit() sorts by dest for byte-deterministic output.
 
-use std::fmt;
-use thiserror::Error;
+use alloc::borrow::ToOwned;
+use alloc::string::String;
+use alloc::vec::Vec;
 
 /// One file in the initramfs overlay.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,23 +27,27 @@ pub struct OverlayManifest {
 }
 
 /// Parse errors from OverlayManifest::parse.
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParseError {
-    #[error("manifest line {line_number}: malformed entry (expected `<dest>:<mode>:<uid>:<gid>`): {content:?}")]
     MalformedLine { line_number: usize, content: String },
-
-    #[error("manifest line {line_number}: dest path must be absolute (start with `/`): {path:?}")]
     NonAbsolutePath { line_number: usize, path: String },
-
-    #[error("manifest line {line_number}: invalid octal mode: {raw:?}")]
     InvalidMode { line_number: usize, raw: String },
+    InvalidUidGid { line_number: usize, field: &'static str, raw: String },
+}
 
-    #[error("manifest line {line_number}: invalid {field}: {raw:?}")]
-    InvalidUidGid {
-        line_number: usize,
-        field: &'static str,
-        raw: String,
-    },
+impl core::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            ParseError::MalformedLine { line_number, content } =>
+                write!(f, "manifest line {line_number}: malformed entry (expected `<dest>:<mode>:<uid>:<gid>`): {content:?}"),
+            ParseError::NonAbsolutePath { line_number, path } =>
+                write!(f, "manifest line {line_number}: dest path must be absolute (start with `/`): {path:?}"),
+            ParseError::InvalidMode { line_number, raw } =>
+                write!(f, "manifest line {line_number}: invalid octal mode: {raw:?}"),
+            ParseError::InvalidUidGid { line_number, field, raw } =>
+                write!(f, "manifest line {line_number}: invalid {field}: {raw:?}"),
+        }
+    }
 }
 
 impl OverlayManifest {
@@ -199,8 +204,8 @@ fn push_decimal_u32(out: &mut String, value: u32) {
     out.push_str(core::str::from_utf8(&buf[i..]).expect("decimal digits are ASCII"));
 }
 
-impl fmt::Display for OverlayEntry {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Display for OverlayEntry {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}:{:o}:{}:{}", self.dest, self.mode, self.uid, self.gid)
     }
 }

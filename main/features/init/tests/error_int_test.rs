@@ -2,8 +2,7 @@ use swe_vminit_init::{ParseError, VmInitError};
 
 #[test]
 fn test_config_read_error_display_includes_prefix() {
-    let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "no such file");
-    let err = VmInitError::from(io_err);
+    let err = VmInitError::ConfigRead("no such file".to_string());
     let msg = err.to_string();
     assert!(
         msg.starts_with("config read error:"),
@@ -13,8 +12,7 @@ fn test_config_read_error_display_includes_prefix() {
 
 #[test]
 fn test_config_read_error_is_config_read_variant() {
-    let io_err = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "access denied");
-    let err = VmInitError::from(io_err);
+    let err = VmInitError::ConfigRead("access denied".to_string());
     assert!(matches!(err, VmInitError::ConfigRead(_)));
 }
 

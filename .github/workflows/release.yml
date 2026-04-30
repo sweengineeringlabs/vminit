@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build-and-release:
-    name: Build and publish xkvm-init ELF
+    name: Build and publish vmfs ELF
     runs-on: ubuntu-24.04
 
     steps:
@@ -45,17 +45,17 @@ jobs:
 
       - name: Verify binary
         run: |
-          BINARY="main/features/bin/target/x86_64-unknown-linux-musl/release/vminit"
+          BINARY="main/features/bin/target/x86_64-unknown-linux-musl/release/vmfs"
           test -f "$BINARY" || { echo "error: binary not found at $BINARY"; exit 1; }
           file "$BINARY"
           ls -lh "$BINARY"
 
       - name: Stage release asset
         run: |
-          cp main/features/bin/target/x86_64-unknown-linux-musl/release/vminit xkvm-init
+          cp main/features/bin/target/x86_64-unknown-linux-musl/release/vmfs vmfs
 
       - name: Create GitHub Release and upload asset
         uses: softprops/action-gh-release@v2
         with:
-          files: xkvm-init
+          files: vmfs
           generate_release_notes: true

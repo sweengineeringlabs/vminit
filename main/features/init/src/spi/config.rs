@@ -1,7 +1,7 @@
 //! /etc/xkvm.conf parser.
 //!
 //! Pure function — takes text, returns InitConfig. No filesystem access.
-//! The bin/ crate calls std::fs::read_to_string and passes the text here.
+//! The bin/ crate calls ffi::read_file and passes the text here.
 //!
 //! Format:
 //!   entrypoint=<arg>        (may appear multiple times — argv[0], argv[1], ...)
@@ -10,14 +10,18 @@
 //!   install=<package>
 //!   interactive=1
 //!   start_agent=1
-//!   kali_mode=1
+//!   mount_rootfs=1
 //!   signal_mode=serial|shared_memory
+//!   network=dhcp|none
 //!   manifest=/etc/packages.json
 //!   manifest_url=https://deploy.internal/manifest.json
 //!   manifest_hash=sha256:<64-hex-chars>
 //!   cache_base=https://cache.nixos.org
 
-use crate::api::config::{InitConfig, SignalMode, VolumeSpec};
+use alloc::string::ToString;
+use alloc::vec::Vec;
+
+use crate::api::config::{GuestNetworkMode, InitConfig, SignalMode, VolumeSpec};
 
 /// Parse /etc/xkvm.conf text into an InitConfig.
 /// Unknown keys are silently ignored. Missing file (empty string) returns default.
@@ -51,12 +55,17 @@ pub fn parse_config(text: &str) -> InitConfig {
             config.interactive = val == "1";
         } else if let Some(val) = line.strip_prefix("start_agent=") {
             config.start_agent = val == "1";
-        } else if let Some(val) = line.strip_prefix("kali_mode=") {
-            config.kali_mode = val == "1";
+        } else if let Some(val) = line.strip_prefix("mount_rootfs=") {
+            config.mount_rootfs = val == "1";
         } else if let Some(val) = line.strip_prefix("signal_mode=") {
             config.signal_mode = match val {
                 "shared_memory" => SignalMode::SharedMemory,
                 _ => SignalMode::Serial,
+            };
+        } else if let Some(val) = line.strip_prefix("network=") {
+            config.network_mode = match val {
+                "none" => GuestNetworkMode::None,
+                _ => GuestNetworkMode::Dhcp,
             };
         } else if let Some(val) = line.strip_prefix("manifest=") {
             config.manifest_path = Some(val.to_string());

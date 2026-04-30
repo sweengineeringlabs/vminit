@@ -1,3 +1,20 @@
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec::Vec;
+
+/// Whether vminit runs DHCP inside the guest at boot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GuestNetworkMode {
+    /// Run a DHCP DISCOVER/OFFER/REQUEST/ACK exchange on eth0 (default).
+    Dhcp,
+    /// Skip DHCP entirely — no network configuration is performed.
+    None,
+}
+
+impl Default for GuestNetworkMode {
+    fn default() -> Self { Self::Dhcp }
+}
+
 /// Parsed volume mount specification.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VolumeSpec {
@@ -24,7 +41,7 @@ pub struct InitConfig {
     pub packages: Vec<String>,
     pub interactive: bool,
     pub start_agent: bool,
-    pub kali_mode: bool,
+    pub mount_rootfs: bool,
     pub signal_mode: SignalMode,
     /// Path to the package manifest JSON inside the guest (e.g. `/etc/packages.json`).
     /// When set, enables network fallback for packages absent from the initrd.
@@ -39,6 +56,8 @@ pub struct InitConfig {
     pub manifest_hash: Option<String>,
     /// Nix binary cache base URL for network package installation.
     pub cache_base: String,
+    /// Whether vminit should run DHCP at boot. Default: Dhcp.
+    pub network_mode: GuestNetworkMode,
 }
 
 impl Default for InitConfig {
@@ -50,12 +69,13 @@ impl Default for InitConfig {
             packages: Vec::new(),
             interactive: false,
             start_agent: false,
-            kali_mode: false,
+            mount_rootfs: false,
             signal_mode: SignalMode::Serial,
             manifest_path: None,
             manifest_url: None,
             manifest_hash: None,
             cache_base: "https://cache.nixos.org".to_string(),
+            network_mode: GuestNetworkMode::Dhcp,
         }
     }
 }

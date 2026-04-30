@@ -5,16 +5,29 @@ edition = "2021"
 description = "vminit PID 1 init binary for Linux x86_64 microVMs"
 
 [[bin]]
-name = "vminit"
+name = "vmfs"
 path = "src/main.rs"
 
+[features]
+packages = [
+    "dep:swe_vminit_pkg",
+    "dep:swe_justpkg_pkg",
+    "dep:sha2",
+    "dep:hex",
+    "swe_vminit_shell/std",
+]
+
 [dependencies]
-swe_vminit_init = { path = "../init" }
-swe_vminit_pkg = { path = "../pkg" }
-swe_vminit_shell = { path = "../shell" }
-swe_justpkg_pkg = { path = "../../../../justpkg/main/features/pkg", package = "swe_justpkg_pkg" }
-sha2 = "0.10"
-hex  = "0.4"
+swe_vminit_init  = { path = "../init" }
+swe_vminit_shell = { path = "../shell", default-features = false }
+swe_vminit_pkg   = { path = "../pkg", optional = true }
+swe_justpkg_pkg  = { path = "../../../../justpkg/main/features/pkg", package = "swe_justpkg_pkg", optional = true }
+sha2 = { version = "0.10", optional = true }
+hex  = { version = "0.4", optional = true }
+linked_list_allocator = "0.10"
+
+[profile.dev]
+panic = "abort"
 
 [profile.release]
 opt-level = "s"

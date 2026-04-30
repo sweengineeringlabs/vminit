@@ -13,7 +13,7 @@ swe_justpkg_pkg = { path = "../../../../justpkg/main/features/pkg", package = "s
 swe_justpkg_nix = { path = "../../../../justpkg/main/features/nix", package = "swe_justpkg_nix" }
 thiserror = "1"
 tar = "0.4"
-flate2 = "1"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 serde_json = "1"
 
 [dev-dependencies]

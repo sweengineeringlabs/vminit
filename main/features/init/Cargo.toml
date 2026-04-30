@@ -9,7 +9,6 @@ name = "swe_vminit_init"
 path = "src/lib.rs"
 
 [dependencies]
-thiserror = "1"
 
 [[test]]
 name = "config_int_test"
