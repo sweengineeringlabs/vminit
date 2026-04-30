@@ -32,7 +32,7 @@ pub enum SignalMode {
     SharedMemory,
 }
 
-/// Parsed /etc/xkvm.conf configuration.
+/// Parsed /etc/vminit.conf configuration.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InitConfig {
     pub entrypoint: Vec<String>,

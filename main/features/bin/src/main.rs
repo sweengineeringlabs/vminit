@@ -2,7 +2,7 @@
 //!
 //! Boot sequence:
 //!   1. Mount pseudo-filesystems (proc, sys, dev, devpts, shm)
-//!   2. Parse /etc/xkvm.conf
+//!   2. Parse /etc/vminit.conf
 //!   3. Mount 9P volume shares
 //!   4. Mount rootfs from /dev/vda (if present)
 //!   5. DHCP network configuration
@@ -88,7 +88,7 @@ fn main_inner() {
 
     let cfg = {
         let mut buf = vec![0u8; 65536];
-        let n = unsafe { ffi::read_file(b"/etc/xkvm.conf\0".as_ptr(), &mut buf) };
+        let n = unsafe { ffi::read_file(b"/etc/vminit.conf\0".as_ptr(), &mut buf) };
         let text = if n > 0 {
             String::from_utf8_lossy(&buf[..n as usize]).into_owned()
         } else {

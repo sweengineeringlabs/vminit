@@ -1,4 +1,4 @@
-//! /etc/xkvm.conf parser.
+//! /etc/vminit.conf parser.
 //!
 //! Pure function — takes text, returns InitConfig. No filesystem access.
 //! The bin/ crate calls ffi::read_file and passes the text here.
@@ -23,7 +23,7 @@ use alloc::vec::Vec;
 
 use crate::api::config::{GuestNetworkMode, InitConfig, SignalMode, VolumeSpec};
 
-/// Parse /etc/xkvm.conf text into an InitConfig.
+/// Parse /etc/vminit.conf text into an InitConfig.
 /// Unknown keys are silently ignored. Missing file (empty string) returns default.
 pub fn parse_config(text: &str) -> InitConfig {
     let mut config = InitConfig::default();
