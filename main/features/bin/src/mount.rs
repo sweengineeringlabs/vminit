@@ -9,7 +9,7 @@ use swe_vminit_init::{OverlayEntry, OverlayManifest, VolumeSpec};
 
 const OVERLAY_MANIFEST_PATH: &[u8] = b"/overlay/.manifest\0";
 const OVERLAY_PREFIX: &str = "/overlay";
-const ROOTFS_SENTINEL: &[u8] = b"/rootfs/.vminit-rootfs-mounted\0";
+const ROOTFS_SENTINEL: &[u8] = b"/rootfs/.xkvm-rootfs-mounted\0";
 
 fn mkdir_p(path: &[u8]) {
     unsafe { ffi::mkdir(path.as_ptr(), 0o755); }
