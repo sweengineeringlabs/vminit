@@ -150,8 +150,11 @@ fn main_inner() {
         mount::apply_overlay(root);
     }
 
+    mount::mount_block_devices(&cfg.block_mounts, rootfs.as_deref());
+
     if let Some(ref root) = rootfs {
         mount::setup_chroot(root, &cfg.volumes);
+        mount::pre_chown_volumes_for_exec(root, &cfg.volumes, &cfg.entrypoint);
     }
 
     if cfg.start_agent {

@@ -5,7 +5,7 @@ use alloc::string::{String, ToString};
 
 use crate::ffi;
 use crate::serial;
-use swe_vminit_init::{OverlayEntry, OverlayManifest, VolumeSpec};
+use swe_vminit_init::{BlockMount, OverlayEntry, OverlayManifest, VolumeSpec};
 
 const OVERLAY_MANIFEST_PATH: &[u8] = b"/overlay/.manifest\0";
 const OVERLAY_PREFIX: &str = "/overlay";
@@ -40,10 +40,34 @@ pub fn mount_volumes(volumes: &[VolumeSpec]) {
         let opts = if vol.read_only {
             "trans=virtio,version=9p2000.L,msize=65536,ro\0".to_string()
         } else {
-            "trans=virtio,version=9p2000.L,msize=65536\0".to_string()
+            "trans=virtio,version=9p2000.L,msize=65536,access=any\0".to_string()
         };
         if do_mount(tag.as_bytes(), mount_point.as_bytes(), b"9p\0", 0, opts.as_bytes()) {
             serial::log(&format!("mounted 9p {} at {}", vol.tag, vol.guest_mount));
+        }
+    }
+}
+
+/// Mount additional block devices (from `block_mount=` vminit.conf entries).
+///
+/// When `rootfs` is `Some("/rootfs")`, each mount target is prefixed with the
+/// rootfs path so the device appears at the correct location after chroot.
+/// When `rootfs` is `None`, devices are mounted at their absolute guest paths.
+pub fn mount_block_devices(mounts: &[BlockMount], rootfs: Option<&str>) {
+    for (i, mnt) in mounts.iter().enumerate() {
+        // /dev/vdb for index 0, /dev/vdc for index 1, etc.
+        let dev_char = (b'b' + i as u8) as char;
+        let device = format!("/dev/vd{}\0", dev_char);
+        let fstype = format!("{}\0", mnt.fstype);
+        let target = match rootfs {
+            Some(r) => format!("{}{}\0", r, mnt.guest_mount),
+            None    => format!("{}\0", mnt.guest_mount),
+        };
+        mkdir_p(target.as_bytes());
+        if do_mount(device.as_bytes(), target.as_bytes(), fstype.as_bytes(), 0, b"") {
+            serial::log(&format!("mounted {} at {}", &device[..device.len()-1], mnt.guest_mount));
+        } else {
+            serial::log(&format!("block_mount failed: {} -> {}", &device[..device.len()-1], mnt.guest_mount));
         }
     }
 }
@@ -100,6 +124,43 @@ pub fn setup_chroot(rootfs: &str, volumes: &[VolumeSpec]) {
         do_mount(outer.as_bytes(), inner.as_bytes(), b"\0", ffi::MS_BIND, b"");
     }
     serial::log("chroot environment configured");
+}
+
+/// If the entrypoint begins with `su-exec UID:GID ...`, pre-chown every rw
+/// volume mount inside the chroot to that uid:gid while still running as root.
+/// This makes the 9P server see the correct ownership before the exec drops
+/// privileges, so the child process can chmod/stat its own directories.
+pub fn pre_chown_volumes_for_exec(rootfs: &str, volumes: &[VolumeSpec], entrypoint: &[String]) {
+    let (uid, gid) = match parse_su_exec_uid_gid(entrypoint) {
+        Some(pair) => pair,
+        None => return,
+    };
+    for vol in volumes {
+        if vol.read_only { continue; }
+        let path = format!("{}{}\0", rootfs, vol.guest_mount);
+        let rc = unsafe { ffi::chown(path.as_ptr(), uid, gid) };
+        if rc == 0 {
+            serial::log(&format!("pre-chown {} -> {}:{}", vol.guest_mount, uid, gid));
+        } else {
+            serial::log(&format!("pre-chown {} failed ({}:{})", vol.guest_mount, uid, gid));
+        }
+    }
+}
+
+/// Parse `su-exec UID:GID` from the start of an entrypoint argv.
+/// Accepts both `/path/to/su-exec` and bare `su-exec` as the first arg.
+fn parse_su_exec_uid_gid(entrypoint: &[String]) -> Option<(u32, u32)> {
+    if entrypoint.len() < 2 { return None; }
+    let cmd = &entrypoint[0];
+    let is_su_exec = cmd == "su-exec"
+        || cmd.ends_with("/su-exec")
+        || cmd.ends_with("\\su-exec");
+    if !is_su_exec { return None; }
+    let spec = &entrypoint[1];
+    let mut parts = spec.splitn(2, ':');
+    let uid: u32 = parts.next()?.parse().ok()?;
+    let gid: u32 = parts.next()?.parse().ok()?;
+    Some((uid, gid))
 }
 
 pub fn apply_overlay(rootfs: &str) {

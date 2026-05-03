@@ -23,6 +23,20 @@ pub struct VolumeSpec {
     pub read_only: bool,
 }
 
+/// A block device to auto-mount before exec.
+///
+/// Written to vminit.conf as `block_mount=device:mountpoint:fstype`.
+/// Example: `block_mount=/dev/vdb:/data:ext4`
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockMount {
+    /// Block device path, e.g. `/dev/vdb`.
+    pub device: String,
+    /// Guest mount point, e.g. `/data`.
+    pub guest_mount: String,
+    /// Filesystem type, e.g. `ext4`.
+    pub fstype: String,
+}
+
 /// Guest→host signaling strategy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SignalMode {
@@ -38,6 +52,7 @@ pub struct InitConfig {
     pub entrypoint: Vec<String>,
     pub env: Vec<(String, String)>,
     pub volumes: Vec<VolumeSpec>,
+    pub block_mounts: Vec<BlockMount>,
     pub packages: Vec<String>,
     pub interactive: bool,
     pub start_agent: bool,
@@ -66,6 +81,7 @@ impl Default for InitConfig {
             entrypoint: Vec::new(),
             env: Vec::new(),
             volumes: Vec::new(),
+            block_mounts: Vec::new(),
             packages: Vec::new(),
             interactive: false,
             start_agent: false,

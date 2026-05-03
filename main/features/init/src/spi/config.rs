@@ -21,7 +21,7 @@
 use alloc::string::ToString;
 use alloc::vec::Vec;
 
-use crate::api::config::{GuestNetworkMode, InitConfig, SignalMode, VolumeSpec};
+use crate::api::config::{BlockMount, GuestNetworkMode, InitConfig, SignalMode, VolumeSpec};
 
 /// Parse /etc/vminit.conf text into an InitConfig.
 /// Unknown keys are silently ignored. Missing file (empty string) returns default.
@@ -47,6 +47,15 @@ pub fn parse_config(text: &str) -> InitConfig {
                     tag: parts[0].to_string(),
                     guest_mount: parts[1].to_string(),
                     read_only: parts[2] == "ro",
+                });
+            }
+        } else if let Some(val) = line.strip_prefix("block_mount=") {
+            let parts: Vec<&str> = val.splitn(3, ':').collect();
+            if parts.len() == 3 {
+                config.block_mounts.push(BlockMount {
+                    device: parts[0].to_string(),
+                    guest_mount: parts[1].to_string(),
+                    fstype: parts[2].to_string(),
                 });
             }
         } else if let Some(val) = line.strip_prefix("install=") {
