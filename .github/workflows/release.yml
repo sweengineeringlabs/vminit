@@ -17,6 +17,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Checkout justpkg sibling (required for optional packages feature)
+        env:
+          CI_GIT_TOKEN: ${{ secrets.CI_GIT_TOKEN }}
+        run: |
+          if [ -z "${CI_GIT_TOKEN:-}" ]; then
+            echo "::error::CI_GIT_TOKEN unset; justpkg clone will fail." >&2
+            exit 1
+          fi
+          SIBLING_ROOT="$(cd "$GITHUB_WORKSPACE/.." && pwd)"
+          git clone --depth 1 --branch dev \
+            "https://x-access-token:${CI_GIT_TOKEN}@github.com/sweengineeringlabs/justpkg.git" \
+            "$SIBLING_ROOT/justpkg"
+          test -f "$SIBLING_ROOT/justpkg/Cargo.toml" \
+            || { echo "::error::justpkg clone incomplete" >&2; exit 1; }
+
       - name: Install musl tools
         run: |
           sudo apt-get update -qq
