@@ -38,10 +38,14 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Build vminit binary
+        # Use --manifest-path to build only the bin crate, bypassing workspace
+        # members that have optional sibling path-deps (main/features/pkg →
+        # justpkg).  The packages feature is not needed for the published vmfs
+        # binary; it can be enabled by callers who supply the sibling.
         run: |
           cargo build --release \
-            --target x86_64-unknown-linux-musl \
-            -p swe_vminit_bin
+            --manifest-path main/features/bin/Cargo.toml \
+            --target x86_64-unknown-linux-musl
 
       - name: Verify binary
         run: |
