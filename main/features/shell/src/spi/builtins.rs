@@ -39,6 +39,7 @@ pub fn dispatch(args: &[String]) -> Option<i32> {
         "false" => Some(1),
         "exit" => Some(argv.first().and_then(|s| s.parse::<i32>().ok()).unwrap_or(0)),
         "chmod" => Some(builtin_chmod(argv)),
+        "chown" => Some(builtin_chown(argv)),
         "sh" | "ash" => {
             if argv.first().map(|s| s.as_str()) == Some("-c") && argv.len() >= 2 {
                 let script = argv[1..].join(" ");
@@ -262,6 +263,75 @@ fn set_permissions(path: &str, mode: u32) -> i32 {
 fn set_permissions(path: &str, _mode: u32) -> i32 {
     shio::write_bytes(format!("chmod: {}: not supported on this platform\n", path).as_bytes());
     1
+}
+
+fn builtin_chown(args: &[String]) -> i32 {
+    // usage: chown [-R] owner[:group] path...
+    let mut recursive = false;
+    let mut rest = args.iter();
+    let first = match rest.next() {
+        Some(a) => a,
+        None => { shio::write_bytes(b"chown: missing operand\n"); return 1; }
+    };
+    let spec = if first == "-R" {
+        recursive = true;
+        match rest.next() {
+            Some(a) => a,
+            None => { shio::write_bytes(b"chown: missing owner\n"); return 1; }
+        }
+    } else {
+        first
+    };
+    let paths: Vec<&str> = rest.map(|s| s.as_str()).collect();
+    if paths.is_empty() { shio::write_bytes(b"chown: missing path\n"); return 1; }
+    let (uid_s, gid_s) = if let Some(pos) = spec.find(':') {
+        (&spec[..pos], Some(&spec[pos + 1..]))
+    } else {
+        (spec.as_str(), None)
+    };
+    let uid: u32 = match uid_s.parse() {
+        Ok(n) => n,
+        Err(_) => { shio::write_bytes(format!("chown: invalid owner '{}'\n", uid_s).as_bytes()); return 1; }
+    };
+    let gid: u32 = match gid_s {
+        Some(s) => match s.parse() {
+            Ok(n) => n,
+            Err(_) => { shio::write_bytes(format!("chown: invalid group '{}'\n", s).as_bytes()); return 1; }
+        },
+        None => u32::MAX,
+    };
+    for path in &paths {
+        if let Err(e) = do_chown(path, uid, gid, recursive) {
+            shio::write_bytes(format!("chown: {}: {}\n", path, e).as_bytes());
+            return 1;
+        }
+    }
+    0
+}
+
+#[cfg(unix)]
+fn do_chown(path: &str, uid: u32, gid: u32, recursive: bool) -> Result<(), std::io::Error> {
+    use std::ffi::CString;
+    let c_path = CString::new(path).map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?;
+    let effective_gid = if gid == u32::MAX { u32::MAX } else { gid };
+    let rc = unsafe { libc::chown(c_path.as_ptr(), uid, effective_gid) };
+    if rc != 0 { return Err(std::io::Error::last_os_error()); }
+    if recursive {
+        if let Ok(rd) = std::fs::read_dir(path) {
+            for entry in rd.flatten() {
+                let child = entry.path();
+                let child_str = child.to_string_lossy();
+                do_chown(&child_str, uid, gid, recursive)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn do_chown(path: &str, _uid: u32, _gid: u32, _recursive: bool) -> Result<(), std::io::Error> {
+    shio::write_bytes(format!("chown: {}: not supported on this platform\n", path).as_bytes());
+    Err(std::io::Error::from_raw_os_error(0))
 }
 
 fn builtin_touch(args: &[String]) -> i32 {

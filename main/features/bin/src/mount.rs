@@ -84,8 +84,11 @@ pub fn mount_rootfs() -> Option<String> {
         serial::log("rootfs: mount(/dev/vda -> /rootfs) failed");
         return None;
     }
-    if !unsafe { ffi::path_exists(b"/rootfs/bin\0".as_ptr()) } {
-        serial::log("rootfs: /rootfs/bin missing — unmounting");
+    let has_bin = unsafe { ffi::path_exists(b"/rootfs/bin\0".as_ptr()) };
+    let has_nix = unsafe { ffi::path_exists(b"/rootfs/nix\0".as_ptr()) };
+    let has_usr = unsafe { ffi::path_exists(b"/rootfs/usr\0".as_ptr()) };
+    if !has_bin && !has_nix && !has_usr {
+        serial::log("rootfs: no recognizable OS root (bin/nix/usr absent) — unmounting");
         unsafe { ffi::umount2(b"/rootfs\0".as_ptr(), 0); }
         return None;
     }

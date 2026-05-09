@@ -104,6 +104,7 @@ fn main_inner() {
     if cfg.network_mode == swe_vminit_init::GuestNetworkMode::Dhcp {
         net::dhcp_configure("eth0");
     }
+    net::configure_loopback();
 
     #[cfg(feature = "packages")]
     let manifest_text: Option<String> = if let Some(ref url) = cfg.manifest_url {

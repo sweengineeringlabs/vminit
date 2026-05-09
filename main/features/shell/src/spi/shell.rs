@@ -178,27 +178,105 @@ fn split_on_pipes(line: &str) -> Vec<String> {
     result
 }
 
+/// Scan `cmd` for shell redirections, returning `(clean_command, output_file, append)`.
+///
+/// Handles:
+/// - `> file` / `>> file` — stdout redirect; file may be quoted
+/// - `N> file` / `N>> file` — fd-numbered redirect (treated as stdout)
+/// - `N>&M` / `>&M` — fd duplication; stripped silently
+/// - `< file` / `N< file` — stdin redirect; stripped (not executed)
+///
+/// All redirections are removed from the returned command string.
 fn parse_redirect(cmd: &str) -> (String, Option<String>, bool) {
-    let mut in_single = false;
-    let mut in_double = false;
     let chars: Vec<char> = cmd.chars().collect();
-    for i in 0..chars.len() {
-        match chars[i] {
-            '\'' if !in_double => in_single = !in_single,
-            '"' if !in_single => in_double = !in_double,
-            '>' if !in_single && !in_double => {
-                let cmd_part = cmd[..i].trim().to_string();
-                let (file_part, append) = if i + 1 < chars.len() && chars[i + 1] == '>' {
-                    (cmd[i + 2..].trim().to_string(), true)
-                } else {
-                    (cmd[i + 1..].trim().to_string(), false)
-                };
-                return (cmd_part, Some(file_part), append);
+    let len = chars.len();
+    let mut clean = String::new();
+    let mut output_file: Option<String> = None;
+    let mut append = false;
+    let mut i = 0;
+
+    while i < len {
+        let ch = chars[i];
+
+        // Quoted word — copy verbatim to clean.
+        if ch == '\'' {
+            clean.push(ch);
+            i += 1;
+            while i < len && chars[i] != '\'' { clean.push(chars[i]); i += 1; }
+            if i < len { clean.push(chars[i]); i += 1; }
+            continue;
+        }
+        if ch == '"' {
+            clean.push(ch);
+            i += 1;
+            while i < len && chars[i] != '"' { clean.push(chars[i]); i += 1; }
+            if i < len { clean.push(chars[i]); i += 1; }
+            continue;
+        }
+
+        // Detect redirect: optional leading digit + `>` or `<`.
+        let has_fd_digit = ch.is_ascii_digit()
+            && i + 1 < len
+            && (chars[i + 1] == '>' || chars[i + 1] == '<');
+        let op_idx = if has_fd_digit { i + 1 } else { i };
+
+        if op_idx < len && (chars[op_idx] == '>' || chars[op_idx] == '<') {
+            let is_out = chars[op_idx] == '>';
+            let is_append = is_out && op_idx + 1 < len && chars[op_idx + 1] == '>';
+            let after_op = if is_append { op_idx + 2 } else { op_idx + 1 };
+
+            // Skip whitespace before target.
+            let mut j = after_op;
+            while j < len && (chars[j] == ' ' || chars[j] == '\t') { j += 1; }
+
+            // `>&N` or `N>&N` — fd duplication; skip the `&N` token.
+            if is_out && j < len && chars[j] == '&' {
+                j += 1;
+                while j < len && chars[j].is_ascii_digit() { j += 1; }
+                i = j;
+                continue;
             }
-            _ => {}
+
+            // Parse the target filename (may be single- or double-quoted).
+            let (filename, new_j) = parse_word_unquote(&chars, j);
+            if is_out {
+                output_file = Some(filename);
+                append = is_append;
+            }
+            // Input redirects (`<`) are stripped with no other effect.
+            i = new_j;
+            continue;
+        }
+
+        clean.push(ch);
+        i += 1;
+    }
+
+    (clean.trim().to_string(), output_file, append)
+}
+
+/// Parse one shell word starting at `start`, unquoting it.
+/// Returns `(unquoted_content, index_after_word)`.
+fn parse_word_unquote(chars: &[char], start: usize) -> (String, usize) {
+    let mut i = start;
+    let mut word = String::new();
+    while i < chars.len() {
+        match chars[i] {
+            '"' => {
+                i += 1;
+                while i < chars.len() && chars[i] != '"' { word.push(chars[i]); i += 1; }
+                if i < chars.len() { i += 1; }
+            }
+            '\'' => {
+                i += 1;
+                while i < chars.len() && chars[i] != '\'' { word.push(chars[i]); i += 1; }
+                if i < chars.len() { i += 1; }
+            }
+            ' ' | '\t' | '>' | '<' | '|' | ';' | '&' => break,
+            c => { word.push(c); i += 1; }
         }
     }
-    (cmd.to_string(), None, false)
+    (word, i)
 }
 
 fn expand_variables(input: &str) -> String {
@@ -304,5 +382,47 @@ mod tests {
     fn test_parse_redirect_append_sets_append_flag() {
         let (_, _, append) = parse_redirect("echo hi >> /tmp/out");
         assert!(append);
+    }
+
+    #[test]
+    fn test_parse_redirect_fd_duplication_drops_redirect_and_strips_fd_digit() {
+        // PostgreSQL initdb uses popen("\"<path>\" --version 2>&1", "r").
+        // '2>&1' must not redirect stdout to a file named '&1' and must not
+        // leave the stray '2' as an argument.
+        let (cmd, file, _) = parse_redirect(
+            r#""/nix/store/abc-postgresql-16.9/bin/postgres" --version 2>&1"#,
+        );
+        assert_eq!(cmd, r#""/nix/store/abc-postgresql-16.9/bin/postgres" --version"#);
+        assert!(file.is_none(), "fd duplication must not produce a file redirect");
+    }
+
+    #[test]
+    fn test_parse_redirect_plain_stdout_redirect_unaffected() {
+        let (cmd, file, append) = parse_redirect("echo hi > /tmp/out");
+        assert_eq!(cmd, "echo hi");
+        assert_eq!(file.unwrap(), "/tmp/out");
+        assert!(!append);
+    }
+
+    #[test]
+    fn test_parse_redirect_quoted_filename_unquoted() {
+        // PostgreSQL initdb: `"postgres" --check ... > "/dev/null" 2>&1`
+        // Quoted /dev/null must be unquoted so File::create works.
+        let (cmd, file, append) = parse_redirect(
+            r#""/bin/echo" --check > "/dev/null" 2>&1"#,
+        );
+        assert_eq!(cmd, r#""/bin/echo" --check"#);
+        assert_eq!(file.unwrap(), "/dev/null");
+        assert!(!append);
+    }
+
+    #[test]
+    fn test_parse_redirect_input_redirect_stripped_from_command() {
+        // `< "/dev/null"` must be stripped; stdout redirect kept.
+        let (cmd, file, _) = parse_redirect(
+            r#""/bin/echo" --check < "/dev/null" > "/dev/null" 2>&1"#,
+        );
+        assert_eq!(cmd, r#""/bin/echo" --check"#);
+        assert_eq!(file.unwrap(), "/dev/null");
     }
 }

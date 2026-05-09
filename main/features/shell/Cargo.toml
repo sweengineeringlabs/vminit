@@ -8,12 +8,19 @@ description = "vminit shell — built-in userspace utilities and interactive REP
 name = "swe_vminit_shell"
 path = "src/lib.rs"
 
+[[bin]]
+name = "sh"
+path = "src/bin/sh.rs"
+
 [features]
 default = ["std"]
 std = ["dep:dirs"]
 
 [dependencies]
 dirs = { version = "5", optional = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [[test]]
 name = "shell_int_test"

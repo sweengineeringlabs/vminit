@@ -136,6 +136,12 @@ pub fn dhcp_configure(ifname: &str) {
     serial::log(&format!("DHCP: configured {}.{}.{}.{} on {}", ip[0], ip[1], ip[2], ip[3], ifname));
 }
 
+pub fn configure_loopback() {
+    bring_interface_up("lo");
+    configure_interface("lo", 0x7f000001u32, 0xff000000u32);
+    serial::log("loopback: configured 127.0.0.1/8 on lo");
+}
+
 fn bring_interface_up(ifname: &str) {
     let sock = unsafe { ffi::socket(ffi::AF_INET, ffi::SOCK_DGRAM, 0) };
     if sock < 0 { return; }
