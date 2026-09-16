@@ -5,3 +5,11 @@ rustflags = [
     "-C", "link-arg=-lc",
     "-C", "link-arg=-lunwind",
 ]
+
+# Use the system `git` binary for SSH fetches instead of cargo's bundled
+# libgit2, which is unreliable over SSH for this workspace's git+ssh
+# sibling deps (e.g. justcas) -- same fix vmruntime's own .cargo/config.toml
+# already applies for the identical symptom (spurious SSH connection
+# timeouts under cargo's default git backend).
+[net]
+git-fetch-with-cli = true

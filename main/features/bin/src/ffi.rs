@@ -9,6 +9,7 @@
 // ── constants ────────────────────────────────────────────────────────────────
 
 pub const MS_BIND: u64 = 4096;
+pub const MS_RDONLY: u64 = 1;
 
 pub const O_RDONLY: i32 = 0;
 pub const O_WRONLY: i32 = 1;

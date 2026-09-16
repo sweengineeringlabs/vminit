@@ -78,11 +78,26 @@ pub fn mount_rootfs() -> Option<String> {
         return None;
     }
     mkdir_p(b"/rootfs\0");
-    let mounted = do_mount(b"/dev/vda\0", b"/rootfs\0", b"ext4\0", 0, b"")
+
+    // Try read-write first — unchanged behavior for a normal writable
+    // device. A device the host marked read-only (VIRTIO_BLK_F_RO,
+    // e.g. vmruntime's ADR 025 [agent].rootfs_writable=false ceiling)
+    // always fails this attempt, so falling back to a read-only mount
+    // here is never a silent downgrade of a device that was actually
+    // writable — the kernel itself already refused the write-mode
+    // mount before this code ever runs.
+    let rw_mounted = do_mount(b"/dev/vda\0", b"/rootfs\0", b"ext4\0", 0, b"")
         || do_mount(b"/dev/vda\0", b"/rootfs\0", b"ext2\0", 0, b"");
-    if !mounted {
-        serial::log("rootfs: mount(/dev/vda -> /rootfs) failed");
+    let ro_mounted = !rw_mounted
+        && (do_mount(b"/dev/vda\0", b"/rootfs\0", b"ext4\0", ffi::MS_RDONLY, b"")
+            || do_mount(b"/dev/vda\0", b"/rootfs\0", b"ext2\0", ffi::MS_RDONLY, b""));
+
+    if !rw_mounted && !ro_mounted {
+        serial::log("rootfs: mount(/dev/vda -> /rootfs) failed (tried both rw and ro)");
         return None;
+    }
+    if ro_mounted {
+        serial::log("rootfs: /dev/vda mounted read-only (rw attempt was refused by the host)");
     }
     let has_bin = unsafe { ffi::path_exists(b"/rootfs/bin\0".as_ptr()) };
     let has_nix = unsafe { ffi::path_exists(b"/rootfs/nix\0".as_ptr()) };
