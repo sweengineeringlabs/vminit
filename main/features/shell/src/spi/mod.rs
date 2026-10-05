@@ -90,8 +90,81 @@ pub mod builtins {
     }
 }
 
+// no_std subset of spi::repl (std mode). No line editing beyond backspace,
+// no history, no tab completion, no `cd`/`export` (those need std::env).
+// Dispatches through this module's own `builtins::dispatch` above — the
+// same fs-independent subset the no-rootfs entrypoint path uses, because
+// this REPL only ever runs when there is no mounted rootfs (interactive
+// mode execs a real /bin/bash or /bin/sh directly when a rootfs provides
+// one; this is purely the last-resort fallback when neither exists).
 #[cfg(not(feature = "std"))]
 pub mod repl {
-    use alloc::string::String;
-    pub fn run(_env: &[(String, String)]) -> i32 { 0 }
+    use crate::spi::io as shio;
+    use alloc::string::{String, ToString};
+    use alloc::vec::Vec;
+
+    const MAX_LINE: usize = 4096;
+    const PROMPT: &[u8] = b"# ";
+
+    fn read_line() -> Option<Vec<u8>> {
+        let mut line: Vec<u8> = Vec::new();
+        loop {
+            let byte = shio::read_byte()?;
+            match byte {
+                4 if line.is_empty() => return None,
+                3 => {
+                    shio::write_bytes(b"^C\n");
+                    line.clear();
+                    shio::write_bytes(PROMPT);
+                }
+                b'\r' | b'\n' => {
+                    shio::write_bytes(b"\n");
+                    return Some(line);
+                }
+                127 | 8 if !line.is_empty() => {
+                    line.pop();
+                    shio::write_bytes(b"\x08 \x08");
+                }
+                32..=126 if line.len() < MAX_LINE => {
+                    line.push(byte);
+                    shio::write_bytes(&[byte]);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Run the interactive REPL. Returns exit code.
+    pub fn run(_env: &[(String, String)]) -> i32 {
+        shio::write_bytes(b"vminit shell (minimal, no rootfs)\n");
+        shio::write_bytes(b"Type 'exit' or Ctrl+D to quit\n\n");
+        let mut last_exit = 0i32;
+        shio::write_bytes(PROMPT);
+        while let Some(line) = read_line() {
+            let line_str = String::from_utf8_lossy(&line).to_string();
+            let trimmed = line_str.trim();
+            if trimmed.is_empty() {
+                shio::write_bytes(PROMPT);
+                continue;
+            }
+            let words: Vec<String> = trimmed.split_whitespace().map(String::from).collect();
+            if words[0] == "exit" {
+                last_exit = words
+                    .get(1)
+                    .and_then(|s| s.parse::<i32>().ok())
+                    .unwrap_or(last_exit);
+                break;
+            }
+            match super::builtins::dispatch(&words) {
+                Some(code) => last_exit = code,
+                None => {
+                    shio::write_bytes(words[0].as_bytes());
+                    shio::write_bytes(b": not found (no rootfs mounted, no external commands available)\n");
+                    last_exit = 127;
+                }
+            }
+            shio::write_bytes(PROMPT);
+        }
+        last_exit
+    }
 }
