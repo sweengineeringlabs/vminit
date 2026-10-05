@@ -35,28 +35,28 @@ pub fn verify_manifest_hash(manifest_bytes: &[u8], hash_spec: &str) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
-    use swe_justpkg_pkg::{HttpClient, JustpkgError};
+    use swe_justpkg_pkg::{HttpClient, PkgError};
 
     struct ErrorHttpClient;
 
     impl HttpClient for ErrorHttpClient {
-        fn get_bytes(&self, url: &str) -> Result<Vec<u8>, JustpkgError> {
-            Err(JustpkgError::Http { url: url.to_string(), status: 503 })
+        fn get_bytes(&self, url: &str) -> Result<Vec<u8>, PkgError> {
+            Err(PkgError::Http { url: url.to_string(), status: 503 })
         }
-        fn get_stream(&self, url: &str, _dest: &mut dyn std::io::Write) -> Result<u64, JustpkgError> {
-            Err(JustpkgError::Http { url: url.to_string(), status: 503 })
+        fn get_stream(&self, url: &str, _dest: &mut dyn std::io::Write) -> Result<u64, PkgError> {
+            Err(PkgError::Http { url: url.to_string(), status: 503 })
         }
     }
 
     struct OkHttpClient { body: &'static [u8] }
 
     impl HttpClient for OkHttpClient {
-        fn get_bytes(&self, _url: &str) -> Result<Vec<u8>, JustpkgError> {
+        fn get_bytes(&self, _url: &str) -> Result<Vec<u8>, PkgError> {
             Ok(self.body.to_vec())
         }
-        fn get_stream(&self, _url: &str, dest: &mut dyn std::io::Write) -> Result<u64, JustpkgError> {
+        fn get_stream(&self, _url: &str, dest: &mut dyn std::io::Write) -> Result<u64, PkgError> {
             let n = std::io::copy(&mut std::io::Cursor::new(self.body), dest)
-                .map_err(JustpkgError::Io)?;
+                .map_err(PkgError::Io)?;
             Ok(n)
         }
     }
