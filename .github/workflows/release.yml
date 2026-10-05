@@ -17,6 +17,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Checkout justpkg sibling
+        # main/features/pkg depends on swe_justpkg_pkg via a path dependency
+        # (optional = true, only compiled under the "packages" feature, which
+        # this build doesn't enable). Cargo still resolves the full dependency
+        # graph at lock-file time regardless of feature state, so the sibling
+        # must physically exist at the expected relative path even though its
+        # code is never built here. justpkg is public — no token needed.
+        run: |
+          SIBLING_ROOT="$(cd "$GITHUB_WORKSPACE/.." && pwd)"
+          git clone --depth 1 --branch dev \
+            https://github.com/sweengineeringlabs/justpkg.git \
+            "$SIBLING_ROOT/justpkg"
+          test -f "$SIBLING_ROOT/justpkg/Cargo.toml" \
+            || { echo "::error::justpkg clone incomplete" >&2; exit 1; }
+
       - name: Install musl tools
         run: |
           sudo apt-get update -qq
