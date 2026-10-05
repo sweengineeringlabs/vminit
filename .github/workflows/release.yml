@@ -17,6 +17,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Configure git auth for private sibling deps (justcas)
+        # justpkg's own Cargo.toml pulls swe_justcas_cas via a git+ssh
+        # dependency; the runner has no SSH key, so rewrite ssh:///git@
+        # URLs to authenticated HTTPS for cargo's git fetches.
+        env:
+          CI_GIT_TOKEN: ${{ secrets.CI_GIT_TOKEN }}
+        run: |
+          if [ -z "${CI_GIT_TOKEN:-}" ]; then
+            echo "::error::CI_GIT_TOKEN unset; private sibling deps (justcas) will fail to clone." >&2
+            exit 1
+          fi
+          git config --global --add url."https://x-access-token:${CI_GIT_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
+          git config --global --add url."https://x-access-token:${CI_GIT_TOKEN}@github.com/".insteadOf "git@github.com:"
+
       - name: Checkout justpkg sibling
         # main/features/pkg depends on swe_justpkg_pkg via a path dependency
         # (optional = true, only compiled under the "packages" feature, which
