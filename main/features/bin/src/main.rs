@@ -74,6 +74,17 @@ fn main() {
 
 // ── shared boot logic ─────────────────────────────────────────────────────────
 
+/// Report a config the host wrote but vminit cannot honour, and power off with exit
+/// code 1 so the host's client sees a failure naming the reason, not a different command.
+fn fatal_config(mode: swe_vminit_init::SignalMode, message: &str) -> ! {
+    serial::log(&format!("FATAL: {message}"));
+    serial::report_exit(1, mode);
+    unsafe { ffi::power_off(); }
+    loop {
+        unsafe { ffi::nanosleep_ms(1000); }
+    }
+}
+
 fn main_inner() {
     swe_vminit_shell::io::set_output(|data| serial::serial_write(data));
     swe_vminit_shell::io::set_input(|| {
@@ -94,7 +105,16 @@ fn main_inner() {
         } else {
             String::new()
         };
-        swe_vminit_init::parse_config(&text)
+        // A full buffer means the file was cut mid-line: refuse rather than run a
+        // different command line than the host wrote.
+        if n as usize == buf.len() {
+            fatal_config(swe_vminit_init::SignalMode::Serial, &format!("/etc/vminit.conf is {} bytes or more, the most vminit reads", buf.len()));
+        }
+        let cfg = swe_vminit_init::parse_config(&text);
+        if let Some(first) = cfg.errors.first() {
+            fatal_config(cfg.signal_mode, &format!("/etc/vminit.conf: {}", first));
+        }
+        cfg
     };
 
     mount::mount_volumes(&cfg.volumes);

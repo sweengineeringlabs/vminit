@@ -59,3 +59,43 @@ fn test_parse_config_volume_tag_with_colon_is_rejected() {
     // The important thing is it doesn't panic.
     assert_eq!(cfg.volumes.len(), 1);
 }
+
+#[test]
+fn test_parse_config_entrypoint_hex_odd_digit_count_is_an_error_naming_the_line() {
+    // Bug this catches: an undecodable argument being skipped, which shifts every
+    // later argument one place to the left.
+    let cfg = parse_config("entrypoint=/bin/sh\nentrypoint_hex=abc\nentrypoint=x\n");
+    assert_eq!(cfg.errors.len(), 1, "errors: {:?}", cfg.errors);
+    assert!(cfg.errors[0].starts_with("line 2:"), "got {:?}", cfg.errors[0]);
+    assert!(cfg.errors[0].contains("odd number"), "got {:?}", cfg.errors[0]);
+}
+
+#[test]
+fn test_parse_config_entrypoint_hex_non_hex_byte_is_an_error() {
+    let cfg = parse_config("entrypoint_hex=zz\n");
+    assert_eq!(cfg.errors.len(), 1);
+    assert!(cfg.errors[0].contains("non-hex"), "got {:?}", cfg.errors[0]);
+    assert!(cfg.entrypoint.is_empty());
+}
+
+#[test]
+fn test_parse_config_entrypoint_hex_nul_byte_is_an_error() {
+    let cfg = parse_config("entrypoint_hex=610062\n");
+    assert_eq!(cfg.errors.len(), 1);
+    assert!(cfg.errors[0].contains("NUL"), "got {:?}", cfg.errors[0]);
+    assert!(cfg.entrypoint.is_empty());
+}
+
+#[test]
+fn test_parse_config_entrypoint_hex_invalid_utf8_is_an_error() {
+    let cfg = parse_config("entrypoint_hex=ff\n");
+    assert_eq!(cfg.errors.len(), 1);
+    assert!(cfg.errors[0].contains("UTF-8"), "got {:?}", cfg.errors[0]);
+    assert!(cfg.entrypoint.is_empty());
+}
+
+#[test]
+fn test_parse_config_without_bad_lines_has_no_errors() {
+    let cfg = parse_config("entrypoint=/bin/true\nenv=A=b\nvolume=h:/m:rw\n");
+    assert!(cfg.errors.is_empty());
+}
