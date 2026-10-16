@@ -31,6 +31,34 @@ entrypoint=http.server
 entrypoint=8080
 ```
 
+A plain `entrypoint=` line cannot carry a newline or a carriage return, and the parser
+trims trailing whitespace, so an argument with either is written with `entrypoint_hex`.
+
+---
+
+### `entrypoint_hex`
+
+**Type:** hex string (repeated, shares the argument list with `entrypoint`)  
+**Default:** none
+
+One element of `argv`, written as the hex digits (either case) of its bytes. Lines of
+`entrypoint` and `entrypoint_hex` append to the same list in file order. The bytes must
+be UTF-8 and must not contain NUL (execve cannot carry one); an empty value is an empty
+argument. A value that is not valid is a boot error, never a skipped argument: vminit
+logs `FATAL: /etc/vminit.conf: line N: ...`, reports exit code 1 and powers off. The same
+happens when `/etc/vminit.conf` fills the 65,536-byte read buffer, because the file
+may have been cut mid-line.
+
+```
+entrypoint=/bin/sh
+entrypoint=-c
+# the argument "echo A\necho B"
+entrypoint_hex=6563686f20410a6563686f2042
+```
+
+An older vminit ignores this key (unknown keys are skipped), so a writer must not emit
+it for a vminit that predates it.
+
 ---
 
 ### `env`

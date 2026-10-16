@@ -73,6 +73,11 @@ pub struct InitConfig {
     pub cache_base: String,
     /// Whether vminit should run DHCP at boot. Default: Dhcp.
     pub network_mode: GuestNetworkMode,
+    /// Lines the parser could not honour, one message each (`line N: ...`).
+    /// A non-empty list means the config does not say what the host wrote, so the
+    /// caller must not run the workload: dropping an `entrypoint_hex=` argument
+    /// would shift every argument after it.
+    pub errors: Vec<String>,
 }
 
 impl Default for InitConfig {
@@ -92,6 +97,7 @@ impl Default for InitConfig {
             manifest_hash: None,
             cache_base: "https://cache.nixos.org".to_string(),
             network_mode: GuestNetworkMode::Dhcp,
+            errors: Vec::new(),
         }
     }
 }

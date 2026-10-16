@@ -67,41 +67,63 @@ pub fn run_entrypoint(args: &[String], env: &[(String, String)], rootfs: Option<
 }
 
 pub fn run_interactive_shell(env: &[(String, String)], rootfs: Option<&str>) -> i32 {
-    let tty_fd = unsafe { ffi::open(b"/dev/ttyS0\0".as_ptr(), ffi::O_RDWR, 0) };
-    if tty_fd >= 0 {
-        unsafe {
-            ffi::setsid();
-            ffi::ioctl(tty_fd, ffi::TIOCSCTTY, 0);
-            ffi::dup2(tty_fd, 0); ffi::dup2(tty_fd, 1); ffi::dup2(tty_fd, 2);
-            if tty_fd > 2 { ffi::close(tty_fd); }
+    // Fork, same as run_entrypoint: this process is PID 1, and PID 1
+    // exiting is always fatal to the kernel (`Attempted to kill init!`).
+    // The guest shell — whether a real /bin/bash/sh execve'd in the child,
+    // or the built-in no_std REPL fallback below — must run as a child so
+    // its own exit (user types `exit`, Ctrl+D, etc.) doesn't take PID 1
+    // down with it.
+    let pid = unsafe { ffi::fork() };
+    if pid < 0 { serial::log("fork() failed"); return 1; }
+
+    if pid == 0 {
+        let tty_fd = unsafe { ffi::open(b"/dev/ttyS0\0".as_ptr(), ffi::O_RDWR, 0) };
+        if tty_fd >= 0 {
+            unsafe {
+                ffi::setsid();
+                ffi::ioctl(tty_fd, ffi::TIOCSCTTY, 0);
+                ffi::dup2(tty_fd, 0); ffi::dup2(tty_fd, 1); ffi::dup2(tty_fd, 2);
+                if tty_fd > 2 { ffi::close(tty_fd); }
+            }
         }
+
+        if let Some(root) = rootfs {
+            let root_cstr = format!("{}\0", root);
+            unsafe { ffi::chroot(root_cstr.as_ptr()); ffi::chdir(b"/\0".as_ptr()); }
+        }
+
+        let mut term_env = env.to_vec();
+        term_env.push(("TERM".to_string(), "linux".to_string()));
+        term_env.push(("PATH".to_string(), "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string()));
+
+        let (env_bufs, env_ptrs) = build_envp(&term_env);
+
+        let bash = b"/bin/bash\0";
+        let bash_arg0 = b"/bin/bash\0";
+        let bash_flag = b"-l\0";
+        let bash_argv: [*const u8; 3] = [bash_arg0.as_ptr(), bash_flag.as_ptr(), core::ptr::null()];
+        unsafe { ffi::execve(bash.as_ptr(), bash_argv.as_ptr(), env_ptrs.as_ptr()); }
+
+        let sh = b"/bin/sh\0";
+        let sh_arg0 = b"/bin/sh\0";
+        let sh_argv: [*const u8; 2] = [sh_arg0.as_ptr(), core::ptr::null()];
+        unsafe { ffi::execve(sh.as_ptr(), sh_argv.as_ptr(), env_ptrs.as_ptr()); }
+
+        // execve only returns on error — neither /bin/bash nor /bin/sh
+        // exist (no rootfs, or a rootfs without either shell). Fall back
+        // to the built-in REPL, then exit the child explicitly: falling
+        // off the end of this function would return into main_inner as
+        // if this were the parent, re-running sync/report_exit/power_off
+        // a second time in the child.
+        serial::log("no /bin/bash or /bin/sh in rootfs, using built-in shell");
+        drop(env_bufs);
+        let code = swe_vminit_shell::repl::run(env);
+        unsafe { ffi::exit_group(code) }
     }
 
-    if let Some(root) = rootfs {
-        let root_cstr = format!("{}\0", root);
-        unsafe { ffi::chroot(root_cstr.as_ptr()); ffi::chdir(b"/\0".as_ptr()); }
-    }
-
-    let mut term_env = env.to_vec();
-    term_env.push(("TERM".to_string(), "linux".to_string()));
-    term_env.push(("PATH".to_string(), "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string()));
-
-    let (env_bufs, env_ptrs) = build_envp(&term_env);
-
-    let bash = b"/bin/bash\0";
-    let bash_arg0 = b"/bin/bash\0";
-    let bash_flag = b"-l\0";
-    let bash_argv: [*const u8; 3] = [bash_arg0.as_ptr(), bash_flag.as_ptr(), core::ptr::null()];
-    unsafe { ffi::execve(bash.as_ptr(), bash_argv.as_ptr(), env_ptrs.as_ptr()); }
-
-    let sh = b"/bin/sh\0";
-    let sh_arg0 = b"/bin/sh\0";
-    let sh_argv: [*const u8; 2] = [sh_arg0.as_ptr(), core::ptr::null()];
-    unsafe { ffi::execve(sh.as_ptr(), sh_argv.as_ptr(), env_ptrs.as_ptr()); }
-
-    serial::log("no /bin/bash or /bin/sh in rootfs, using built-in shell");
-    drop(env_bufs);
-    swe_vminit_shell::repl::run(env)
+    let mut status: i32 = 0;
+    unsafe { ffi::waitpid(pid, &mut status, 0); }
+    if status & 0x7F == 0 { (status >> 8) & 0xFF } else { 1 }
 }
 
 pub fn start_agent() {

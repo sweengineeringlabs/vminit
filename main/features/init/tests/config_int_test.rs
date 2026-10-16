@@ -186,3 +186,40 @@ fn test_parse_config_manifest_hash_empty_value_leaves_none() {
         "manifest_hash= with empty value must leave field as None"
     );
 }
+
+#[test]
+fn test_parse_config_entrypoint_hex_carries_newlines_carriage_returns_and_trailing_space() {
+    // "echo A\necho B\r\nlast \n" as hex. A plain `entrypoint=` line would be cut at the
+    // first newline (#437); the hex form must come back byte for byte.
+    let argument = "echo A\necho B\r\nlast \n";
+    let hex: String = argument.bytes().map(|b| format!("{:02x}", b)).collect();
+    let cfg = parse_config(&format!("entrypoint_hex={}\n", hex));
+    assert_eq!(cfg.entrypoint, vec![argument]);
+    assert!(cfg.errors.is_empty(), "unexpected errors: {:?}", cfg.errors);
+}
+
+#[test]
+fn test_parse_config_entrypoint_hex_keeps_position_among_plain_entrypoints() {
+    let cfg = parse_config("entrypoint=/bin/sh\nentrypoint=-c\nentrypoint_hex=610a62\nentrypoint=tail\n");
+    assert_eq!(cfg.entrypoint, vec!["/bin/sh", "-c", "a\nb", "tail"]);
+}
+
+#[test]
+fn test_parse_config_entrypoint_hex_accepts_uppercase_digits() {
+    let cfg = parse_config("entrypoint_hex=610A62\n");
+    assert_eq!(cfg.entrypoint, vec!["a\nb"]);
+}
+
+#[test]
+fn test_parse_config_entrypoint_hex_empty_value_is_an_empty_argument() {
+    let cfg = parse_config("entrypoint=/bin/true\nentrypoint_hex=\n");
+    assert_eq!(cfg.entrypoint, vec!["/bin/true", ""]);
+    assert!(cfg.errors.is_empty());
+}
+
+#[test]
+fn test_parse_config_entrypoint_plain_line_with_embedded_newline_is_cut_at_the_newline() {
+    // Documents why entrypoint_hex= exists: the plain form cannot carry a newline.
+    let cfg = parse_config("entrypoint=echo A\necho B\n");
+    assert_eq!(cfg.entrypoint, vec!["echo A"]);
+}

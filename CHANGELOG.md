@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- `entrypoint_hex=` config key: an entrypoint argument written as hex of its bytes, for arguments a line cannot carry (newline, carriage return, trailing whitespace); a malformed value, or a `vminit.conf` that fills the 64 KiB read buffer, is a boot error (exit code 1) instead of a silently different command line (sweengineeringlabs/vmruntime#437)
 - `swe_vminit_init`: config parsing (`/etc/xkvm.conf`), overlay manifest, and signal protocol constants
 - `swe_vminit_shell`: built-in utilities (`echo`, `cat`, `ls`, `grep`, `wc`, and 20+ others) and interactive REPL with history, tab completion, and line editing
 - Signal protocol: `XIKA_READY` / `XIKA_EXIT:N` over serial; `SHM_MAGIC_READY` / `SHM_MAGIC_EXIT_MASK` over shared memory at `0x500`
