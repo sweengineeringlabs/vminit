@@ -95,10 +95,13 @@ fn main_inner() {
     });
 
     serial::log("vminit starting");
-    // Names the build in every boot log; the host reads the same data from the file.
-    serial::serial_write(format!("{}\n", swe_vminit_init::format_own_banner(marker::VERSION)).as_bytes());
 
     mount::mount_pseudofs();
+
+    // Names the build in every boot log; the host reads the same data from the file.
+    // After mount_pseudofs: /dev/ttyS0 does not exist before devtmpfs is mounted, so
+    // anything written earlier is lost (as "vminit starting" above is).
+    serial::serial_write(format!("{}\n", swe_vminit_init::format_own_banner(marker::VERSION)).as_bytes());
 
     let cfg = {
         let mut buf = vec![0u8; 65536];

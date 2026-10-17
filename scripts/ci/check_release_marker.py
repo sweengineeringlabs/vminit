@@ -96,8 +96,9 @@ def main(argv):
             notes.write("\nThe list is read from the `.note.vminit` ELF note of the attached `vmfs`.\n\n")
 
 
-try:
-    main(sys.argv)
-except (OSError, struct.error, UnicodeDecodeError) as error:
-    # An unreadable, truncated or hostile file is a failed check, not a traceback.
-    fail(f"cannot read the marker: {error}")
+if __name__ == "__main__":
+    try:
+        main(sys.argv)
+    except (OSError, struct.error, UnicodeDecodeError) as error:
+        # An unreadable, truncated or hostile file is a failed check, not a traceback.
+        fail(f"cannot read the marker: {error}")
