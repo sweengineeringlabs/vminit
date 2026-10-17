@@ -41,3 +41,11 @@ path = "tests/error_int_test.rs"
 [[test]]
 name = "error_security_test"
 path = "tests/error_security_test.rs"
+
+[[test]]
+name = "capability_int_test"
+path = "tests/capability_int_test.rs"
+
+[[test]]
+name = "marker_int_test"
+path = "tests/marker_int_test.rs"

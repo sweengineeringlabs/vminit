@@ -1,12 +1,18 @@
 [package]
 name = "swe_vminit_bin"
-version = "0.1.0"
+version = "0.1.6"
 edition = "2021"
 description = "vminit PID 1 init binary for Linux x86_64 microVMs"
 
 [[bin]]
 name = "vmfs"
 path = "src/main.rs"
+# no_std + no_main: the unit-test harness cannot link; tests/ drive the built binary.
+test = false
+
+[[test]]
+name = "marker_int_test"
+path = "tests/marker_int_test.rs"
 
 [features]
 packages = [

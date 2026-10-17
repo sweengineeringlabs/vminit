@@ -35,6 +35,7 @@ mod heap;
 mod install;
 #[cfg(feature = "packages")]
 mod manifest;
+mod marker;
 mod mount;
 mod net;
 mod serial;
@@ -94,6 +95,8 @@ fn main_inner() {
     });
 
     serial::log("vminit starting");
+    // Names the build in every boot log; the host reads the same data from the file.
+    serial::serial_write(format!("{}\n", swe_vminit_init::format_own_banner(marker::VERSION)).as_bytes());
 
     mount::mount_pseudofs();
 

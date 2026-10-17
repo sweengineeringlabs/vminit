@@ -6,3 +6,8 @@ pub use crate::spi::signal::{
     format_exit, format_ready, parse_exit, shm_exit_value, EXIT_PREFIX, READY_SIGNAL,
     SHM_MAGIC_EXIT_MASK, SHM_MAGIC_READY, SHM_SIGNAL_ADDR,
 };
+pub use crate::api::marker::{
+    Marker, MarkerError, CAPABILITIES, MARKER_FORMAT_VERSION, MARKER_NOTE_NAME, MARKER_NOTE_TYPE,
+    MARKER_SECTION,
+};
+pub use crate::spi::marker::{encode_marker, format_banner, format_own_banner, marker_len, read_marker};
