@@ -45,7 +45,10 @@ const MAX_KEY_IN_MESSAGE: usize = 64;
 fn decode_hex_argument(hex: &str) -> Result<String, String> {
     let digits = hex.as_bytes();
     if digits.len() % 2 != 0 {
-        return Err(format!("entrypoint_hex has an odd number of digits ({})", digits.len()));
+        return Err(format!(
+            "entrypoint_hex has an odd number of digits ({})",
+            digits.len()
+        ));
     }
     let mut bytes = Vec::with_capacity(digits.len() / 2);
     for pair in digits.chunks_exact(2) {
@@ -91,8 +94,13 @@ fn parse_flag(key: &str, val: &str) -> Result<bool, String> {
 fn split_three_fields<'a>(key: &str, val: &'a str, shape: &str) -> Result<[&'a str; 3], String> {
     let mut parts = val.splitn(3, ':');
     match (parts.next(), parts.next(), parts.next()) {
-        (Some(a), Some(b), Some(c)) if !a.is_empty() && !b.is_empty() && !c.is_empty() => Ok([a, b, c]),
-        _ => Err(format!("{} must be {} with three non-empty fields", key, shape)),
+        (Some(a), Some(b), Some(c)) if !a.is_empty() && !b.is_empty() && !c.is_empty() => {
+            Ok([a, b, c])
+        }
+        _ => Err(format!(
+            "{} must be {} with three non-empty fields",
+            key, shape
+        )),
     }
 }
 
@@ -103,7 +111,9 @@ fn apply_line(config: &mut InitConfig, key: &str, val: &str) -> Result<(), Strin
         "entrypoint" => config.entrypoint.push(val.to_string()),
         "entrypoint_hex" => config.entrypoint.push(decode_hex_argument(val)?),
         "env" => match val.find('=') {
-            Some(pos) if pos > 0 => config.env.push((val[..pos].to_string(), val[pos + 1..].to_string())),
+            Some(pos) if pos > 0 => config
+                .env
+                .push((val[..pos].to_string(), val[pos + 1..].to_string())),
             _ => return Err("env must be NAME=VALUE with a non-empty NAME".to_string()),
         },
         "volume" => {
@@ -120,7 +130,8 @@ fn apply_line(config: &mut InitConfig, key: &str, val: &str) -> Result<(), Strin
             });
         }
         "block_mount" => {
-            let [device, guest_mount, fstype] = split_three_fields(key, val, "device:mountpoint:fstype")?;
+            let [device, guest_mount, fstype] =
+                split_three_fields(key, val, "device:mountpoint:fstype")?;
             config.block_mounts.push(BlockMount {
                 device: device.to_string(),
                 guest_mount: guest_mount.to_string(),
@@ -151,9 +162,14 @@ fn apply_line(config: &mut InitConfig, key: &str, val: &str) -> Result<(), Strin
             };
         }
         "dns" => {
-            let address: IpAddr = val.parse().map_err(|_| "dns must be an IPv4 or IPv6 address".to_string())?;
+            let address: IpAddr = val
+                .parse()
+                .map_err(|_| "dns must be an IPv4 or IPv6 address".to_string())?;
             if config.dns_servers.len() >= MAX_DNS_SERVERS {
-                return Err(format!("dns may appear at most {} times (the resolver uses no more)", MAX_DNS_SERVERS));
+                return Err(format!(
+                    "dns may appear at most {} times (the resolver uses no more)",
+                    MAX_DNS_SERVERS
+                ));
             }
             config.dns_servers.push(address);
         }
@@ -165,7 +181,9 @@ fn apply_line(config: &mut InitConfig, key: &str, val: &str) -> Result<(), Strin
         }
         "manifest_url" => {
             if !val.starts_with("https://") {
-                return Err("manifest_url must start with https:// (plain http is refused)".to_string());
+                return Err(
+                    "manifest_url must start with https:// (plain http is refused)".to_string(),
+                );
             }
             config.manifest_url = Some(val.to_string());
         }
@@ -183,7 +201,12 @@ fn apply_line(config: &mut InitConfig, key: &str, val: &str) -> Result<(), Strin
         }
         // A key in CAPABILITIES with no arm above: the list promises a capability
         // the parser does not provide, so refuse the line like an unknown key.
-        _ => return Err(format!("\"{}\" is listed as a capability but has no parser", quote_key(key))),
+        _ => {
+            return Err(format!(
+                "\"{}\" is listed as a capability but has no parser",
+                quote_key(key)
+            ))
+        }
     }
     Ok(())
 }
@@ -218,7 +241,9 @@ pub fn parse_config(text: &str) -> InitConfig {
         }
 
         let Some((key, val)) = line.split_once('=') else {
-            config.errors.push(format!("line {}: not a key=value line", index + 1));
+            config
+                .errors
+                .push(format!("line {}: not a key=value line", index + 1));
             continue;
         };
         if !CAPABILITIES.contains(&key) {
@@ -230,7 +255,9 @@ pub fn parse_config(text: &str) -> InitConfig {
             continue;
         }
         if let Err(reason) = apply_line(&mut config, key, val) {
-            config.errors.push(format!("line {}: {}", index + 1, reason));
+            config
+                .errors
+                .push(format!("line {}: {}", index + 1, reason));
         }
     }
 

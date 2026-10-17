@@ -73,7 +73,10 @@ fn test_read_marker_encoded_note_returns_version_and_capabilities() {
         }
     );
     assert!(marker.has_capability("bc"));
-    assert!(!marker.has_capability("b"), "a prefix of a capability is not the capability");
+    assert!(
+        !marker.has_capability("b"),
+        "a prefix of a capability is not the capability"
+    );
 }
 
 #[test]
@@ -101,19 +104,28 @@ fn test_read_marker_elf_without_program_headers_returns_no_marker() {
 fn test_read_marker_same_name_other_type_returns_no_marker() {
     let mut note = sample_note().to_vec();
     note[8..12].copy_from_slice(&2u32.to_le_bytes());
-    assert_eq!(read_marker(&elf_with_note_segment(&note)), Err(MarkerError::NoMarker));
+    assert_eq!(
+        read_marker(&elf_with_note_segment(&note)),
+        Err(MarkerError::NoMarker)
+    );
 }
 
 #[test]
 fn test_read_marker_other_name_same_type_returns_no_marker() {
     let mut note = sample_note().to_vec();
     note[12..18].copy_from_slice(b"vminiT");
-    assert_eq!(read_marker(&elf_with_note_segment(&note)), Err(MarkerError::NoMarker));
+    assert_eq!(
+        read_marker(&elf_with_note_segment(&note)),
+        Err(MarkerError::NoMarker)
+    );
 }
 
 #[test]
 fn test_read_marker_not_elf_returns_not_elf64() {
-    assert_eq!(read_marker(b"#!/bin/sh\necho hi\n"), Err(MarkerError::NotElf64));
+    assert_eq!(
+        read_marker(b"#!/bin/sh\necho hi\n"),
+        Err(MarkerError::NotElf64)
+    );
     assert_eq!(read_marker(&[]), Err(MarkerError::NotElf64));
 }
 
@@ -131,7 +143,11 @@ fn test_read_marker_elf32_or_big_endian_returns_not_elf64() {
 fn test_read_marker_segment_past_end_of_file_returns_truncated() {
     let file = elf_with_note_segment(&sample_note());
     for cut in 120..file.len() {
-        assert_eq!(read_marker(&file[..cut]), Err(MarkerError::Truncated), "cut at {cut}");
+        assert_eq!(
+            read_marker(&file[..cut]),
+            Err(MarkerError::Truncated),
+            "cut at {cut}"
+        );
     }
 }
 
@@ -145,7 +161,10 @@ fn test_read_marker_program_header_table_past_end_returns_truncated() {
 fn test_read_marker_unknown_format_version_returns_unsupported_format() {
     let mut note = sample_note().to_vec();
     note[20..24].copy_from_slice(&2u32.to_le_bytes());
-    assert_eq!(read_marker(&elf_with_note_segment(&note)), Err(MarkerError::UnsupportedFormat(2)));
+    assert_eq!(
+        read_marker(&elf_with_note_segment(&note)),
+        Err(MarkerError::UnsupportedFormat(2))
+    );
 }
 
 #[test]
@@ -154,28 +173,40 @@ fn test_read_marker_bytes_after_last_capability_returns_malformed() {
     // descsz 20 -> 24: four payload bytes after the last capability.
     note[4..8].copy_from_slice(&24u32.to_le_bytes());
     note.extend_from_slice(&[0x41; 4]);
-    assert!(matches!(read_marker(&elf_with_note_segment(&note)), Err(MarkerError::Malformed(_))));
+    assert!(matches!(
+        read_marker(&elf_with_note_segment(&note)),
+        Err(MarkerError::Malformed(_))
+    ));
 }
 
 #[test]
 fn test_read_marker_string_longer_than_payload_returns_malformed() {
     let mut note = sample_note().to_vec();
     note[24..26].copy_from_slice(&200u16.to_le_bytes()); // version_len
-    assert!(matches!(read_marker(&elf_with_note_segment(&note)), Err(MarkerError::Malformed(_))));
+    assert!(matches!(
+        read_marker(&elf_with_note_segment(&note)),
+        Err(MarkerError::Malformed(_))
+    ));
 }
 
 #[test]
 fn test_read_marker_capability_count_larger_than_payload_returns_malformed() {
     let mut note = sample_note().to_vec();
     note[31..33].copy_from_slice(&60000u16.to_le_bytes()); // capability_count
-    assert!(matches!(read_marker(&elf_with_note_segment(&note)), Err(MarkerError::Malformed(_))));
+    assert!(matches!(
+        read_marker(&elf_with_note_segment(&note)),
+        Err(MarkerError::Malformed(_))
+    ));
 }
 
 #[test]
 fn test_read_marker_version_not_utf8_returns_malformed() {
     let mut note = sample_note().to_vec();
     note[26] = 0xff;
-    assert!(matches!(read_marker(&elf_with_note_segment(&note)), Err(MarkerError::Malformed(_))));
+    assert!(matches!(
+        read_marker(&elf_with_note_segment(&note)),
+        Err(MarkerError::Malformed(_))
+    ));
 }
 
 #[test]
@@ -191,10 +222,16 @@ fn test_read_marker_hostile_segment_size_returns_error_without_panic() {
 fn test_read_marker_hostile_note_lengths_return_error_without_panic() {
     let mut note = sample_note().to_vec();
     note[..4].copy_from_slice(&u32::MAX.to_le_bytes()); // namesz
-    assert_eq!(read_marker(&elf_with_note_segment(&note)), Err(MarkerError::Truncated));
+    assert_eq!(
+        read_marker(&elf_with_note_segment(&note)),
+        Err(MarkerError::Truncated)
+    );
     let mut note = sample_note().to_vec();
     note[4..8].copy_from_slice(&u32::MAX.to_le_bytes()); // descsz
-    assert_eq!(read_marker(&elf_with_note_segment(&note)), Err(MarkerError::Truncated));
+    assert_eq!(
+        read_marker(&elf_with_note_segment(&note)),
+        Err(MarkerError::Truncated)
+    );
 }
 
 #[test]
@@ -206,12 +243,18 @@ fn test_read_marker_program_header_entry_size_zero_returns_malformed() {
 
 #[test]
 fn test_format_banner_lists_version_and_capabilities_in_order() {
-    assert_eq!(format_banner("0.1.6", &["entrypoint", "entrypoint_hex"]), "vminit 0.1.6 capabilities=entrypoint,entrypoint_hex");
+    assert_eq!(
+        format_banner("0.1.6", &["entrypoint", "entrypoint_hex"]),
+        "vminit 0.1.6 capabilities=entrypoint,entrypoint_hex"
+    );
 }
 
 #[test]
 fn test_format_own_banner_names_every_capability_of_the_parser() {
     let banner = format_own_banner("9.9.9");
-    assert_eq!(banner, format!("vminit 9.9.9 capabilities={}", CAPABILITIES.join(",")));
+    assert_eq!(
+        banner,
+        format!("vminit 9.9.9 capabilities={}", CAPABILITIES.join(","))
+    );
     assert!(banner.contains("entrypoint_hex"));
 }

@@ -6,7 +6,8 @@ use swe_vminit_init::{read_marker, CAPABILITIES, MARKER_SECTION};
 
 fn read_built_vmfs() -> Vec<u8> {
     let path = env!("CARGO_BIN_EXE_vmfs");
-    std::fs::read(path).unwrap_or_else(|error| panic!("cannot read the built vmfs at {path}: {error}"))
+    std::fs::read(path)
+        .unwrap_or_else(|error| panic!("cannot read the built vmfs at {path}: {error}"))
 }
 
 #[test]
@@ -18,8 +19,15 @@ fn test_read_marker_built_vmfs_returns_package_version() {
 #[test]
 fn test_read_marker_built_vmfs_lists_every_capability_of_the_parser() {
     let marker = read_marker(&read_built_vmfs()).expect("the built vmfs carries a marker");
-    assert_eq!(marker.capabilities, CAPABILITIES, "the file lists a different set than the parser accepts");
-    assert!(marker.has_capability("entrypoint_hex"), "capabilities: {:?}", marker.capabilities);
+    assert_eq!(
+        marker.capabilities, CAPABILITIES,
+        "the file lists a different set than the parser accepts"
+    );
+    assert!(
+        marker.has_capability("entrypoint_hex"),
+        "capabilities: {:?}",
+        marker.capabilities
+    );
 }
 
 #[test]
@@ -28,7 +36,10 @@ fn test_read_marker_built_vmfs_has_note_section_named_in_the_format() {
     // the constant, so check the built file contains the name in its section names.
     let file = read_built_vmfs();
     let needle = MARKER_SECTION.as_bytes();
-    assert!(file.windows(needle.len()).any(|window| window == needle), "no {MARKER_SECTION} section name in the file");
+    assert!(
+        file.windows(needle.len()).any(|window| window == needle),
+        "no {MARKER_SECTION} section name in the file"
+    );
 }
 
 #[test]

@@ -151,7 +151,10 @@ pub fn write_dns_servers(servers: &[core::net::IpAddr]) -> bool {
         ffi::write_file(b"/etc/resolv.conf\0".as_ptr(), resolv.as_bytes())
     };
     if written {
-        serial::log(&format!("dns: wrote {} nameserver line(s) to /etc/resolv.conf", servers.len()));
+        serial::log(&format!(
+            "dns: wrote {} nameserver line(s) to /etc/resolv.conf",
+            servers.len()
+        ));
     }
     written
 }

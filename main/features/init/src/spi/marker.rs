@@ -88,7 +88,10 @@ const fn put_bytes(out: &mut [u8], at: usize, bytes: &[u8]) -> usize {
 }
 
 const fn put_string(out: &mut [u8], at: usize, text: &str) -> usize {
-    assert!(text.len() <= u16::MAX as usize, "marker string longer than 65535 bytes");
+    assert!(
+        text.len() <= u16::MAX as usize,
+        "marker string longer than 65535 bytes"
+    );
     let at = put_u16(out, at, text.len() as u16);
     put_bytes(out, at, text.as_bytes())
 }
@@ -96,8 +99,14 @@ const fn put_string(out: &mut [u8], at: usize, text: &str) -> usize {
 /// Encode the marker note. `N` must equal `marker_len(version, capabilities)`; a
 /// mismatch is a compile error when called in a `const` context.
 pub const fn encode_marker<const N: usize>(version: &str, capabilities: &[&str]) -> [u8; N] {
-    assert!(N == marker_len(version, capabilities), "N must be marker_len(version, capabilities)");
-    assert!(capabilities.len() <= u16::MAX as usize, "more than 65535 capabilities");
+    assert!(
+        N == marker_len(version, capabilities),
+        "N must be marker_len(version, capabilities)"
+    );
+    assert!(
+        capabilities.len() <= u16::MAX as usize,
+        "more than 65535 capabilities"
+    );
     let mut out = [0u8; N];
     let name = MARKER_NOTE_NAME.as_bytes();
     let mut at = put_u32(&mut out, 0, (name.len() + 1) as u32);
@@ -114,7 +123,10 @@ pub const fn encode_marker<const N: usize>(version: &str, capabilities: &[&str])
         at = put_string(&mut out, at, capabilities[index]);
         index += 1;
     }
-    assert!(pad_to_align(at) == N, "encoded length differs from marker_len");
+    assert!(
+        pad_to_align(at) == N,
+        "encoded length differs from marker_len"
+    );
     out
 }
 
@@ -151,22 +163,31 @@ fn read_u64(bytes: &[u8], at: usize) -> Result<u64, MarkerError> {
 
 /// Read a length-prefixed UTF-8 string of the payload, advancing `at`.
 fn read_string(payload: &[u8], at: &mut usize) -> Result<String, MarkerError> {
-    let len = read_u16(payload, *at).map_err(|_| MarkerError::Malformed("string length past the payload"))? as usize;
+    let len = read_u16(payload, *at)
+        .map_err(|_| MarkerError::Malformed("string length past the payload"))?
+        as usize;
     let start = *at + 2;
     let end = start + len;
-    let raw = payload.get(start..end).ok_or(MarkerError::Malformed("string past the payload"))?;
+    let raw = payload
+        .get(start..end)
+        .ok_or(MarkerError::Malformed("string past the payload"))?;
     *at = end;
-    core::str::from_utf8(raw).map(|text| text.to_string()).map_err(|_| MarkerError::Malformed("string is not UTF-8"))
+    core::str::from_utf8(raw)
+        .map(|text| text.to_string())
+        .map_err(|_| MarkerError::Malformed("string is not UTF-8"))
 }
 
 fn decode_payload(payload: &[u8]) -> Result<Marker, MarkerError> {
-    let format_version = read_u32(payload, 0).map_err(|_| MarkerError::Malformed("payload shorter than its format version"))?;
+    let format_version = read_u32(payload, 0)
+        .map_err(|_| MarkerError::Malformed("payload shorter than its format version"))?;
     if format_version != MARKER_FORMAT_VERSION {
         return Err(MarkerError::UnsupportedFormat(format_version));
     }
     let mut at = 4;
     let version = read_string(payload, &mut at)?;
-    let count = read_u16(payload, at).map_err(|_| MarkerError::Malformed("capability count past the payload"))? as usize;
+    let count = read_u16(payload, at)
+        .map_err(|_| MarkerError::Malformed("capability count past the payload"))?
+        as usize;
     at += 2;
     let mut capabilities = Vec::with_capacity(count.min(payload.len()));
     for _ in 0..count {
@@ -175,7 +196,11 @@ fn decode_payload(payload: &[u8]) -> Result<Marker, MarkerError> {
     if at != payload.len() {
         return Err(MarkerError::Malformed("bytes after the last capability"));
     }
-    Ok(Marker { format_version, version, capabilities })
+    Ok(Marker {
+        format_version,
+        version,
+        capabilities,
+    })
 }
 
 /// Walk the notes of one `PT_NOTE` segment and decode the first `vminit` note.
@@ -187,15 +212,27 @@ fn find_note(segment: &[u8], align: usize) -> Result<Option<Marker>, MarkerError
         let desc_len = read_u32(segment, at + 4)? as usize;
         let note_type = read_u32(segment, at + 8)?;
         let name_start = at + NOTE_HEADER_LEN;
-        let name_end = name_start.checked_add(name_len).ok_or(MarkerError::Truncated)?;
-        let desc_start = name_start.checked_add(pad(name_len)).ok_or(MarkerError::Truncated)?;
-        let desc_end = desc_start.checked_add(desc_len).ok_or(MarkerError::Truncated)?;
-        let name = segment.get(name_start..name_end).ok_or(MarkerError::Truncated)?;
-        let desc = segment.get(desc_start..desc_end).ok_or(MarkerError::Truncated)?;
+        let name_end = name_start
+            .checked_add(name_len)
+            .ok_or(MarkerError::Truncated)?;
+        let desc_start = name_start
+            .checked_add(pad(name_len))
+            .ok_or(MarkerError::Truncated)?;
+        let desc_end = desc_start
+            .checked_add(desc_len)
+            .ok_or(MarkerError::Truncated)?;
+        let name = segment
+            .get(name_start..name_end)
+            .ok_or(MarkerError::Truncated)?;
+        let desc = segment
+            .get(desc_start..desc_end)
+            .ok_or(MarkerError::Truncated)?;
         if note_type == MARKER_NOTE_TYPE && name == [MARKER_NOTE_NAME.as_bytes(), &[0]].concat() {
             return decode_payload(desc).map(Some);
         }
-        at = desc_start.checked_add(pad(desc_len)).ok_or(MarkerError::Truncated)?;
+        at = desc_start
+            .checked_add(pad(desc_len))
+            .ok_or(MarkerError::Truncated)?;
     }
     Ok(None)
 }
@@ -214,7 +251,9 @@ pub fn read_marker(file: &[u8]) -> Result<Marker, MarkerError> {
     let entry_size = read_u16(file, 0x36)? as usize;
     let entry_count = read_u16(file, 0x38)? as usize;
     if entry_count > 0 && entry_size < PROGRAM_HEADER_LEN {
-        return Err(MarkerError::Malformed("program header entries smaller than 56 bytes"));
+        return Err(MarkerError::Malformed(
+            "program header entries smaller than 56 bytes",
+        ));
     }
     for index in 0..entry_count {
         let header = index
@@ -226,7 +265,11 @@ pub fn read_marker(file: &[u8]) -> Result<Marker, MarkerError> {
         }
         let offset = read_u64(file, header + 8)? as usize;
         let size = read_u64(file, header + 32)? as usize;
-        let align = if read_u64(file, header + 48)? == 8 { 8 } else { NOTE_ALIGN };
+        let align = if read_u64(file, header + 48)? == 8 {
+            8
+        } else {
+            NOTE_ALIGN
+        };
         let end = offset.checked_add(size).ok_or(MarkerError::Truncated)?;
         let segment = file.get(offset..end).ok_or(MarkerError::Truncated)?;
         if let Some(marker) = find_note(segment, align)? {

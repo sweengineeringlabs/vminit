@@ -43,7 +43,10 @@ fn test_parse_config_flag_other_than_0_or_1_is_an_error() {
     for key in ["interactive", "start_agent", "mount_rootfs"] {
         let cfg = parse_config(&format!("{key}=yes\n"));
         assert_eq!(cfg.errors.len(), 1, "{key}: {:?}", cfg.errors);
-        assert!(!cfg.interactive && !cfg.start_agent && !cfg.mount_rootfs, "{key} took effect");
+        assert!(
+            !cfg.interactive && !cfg.start_agent && !cfg.mount_rootfs,
+            "{key} took effect"
+        );
     }
 }
 
@@ -61,7 +64,14 @@ fn test_parse_config_network_other_than_dhcp_or_none_is_an_error() {
 
 #[test]
 fn test_parse_config_dns_not_an_address_is_an_error() {
-    for value in ["", "example.com", "10.0.0.256", "10.0.0.1 10.0.0.2", "10.0.0.1\u{0}", "::g"] {
+    for value in [
+        "",
+        "example.com",
+        "10.0.0.256",
+        "10.0.0.1 10.0.0.2",
+        "10.0.0.1\u{0}",
+        "::g",
+    ] {
         let cfg = parse_config(&format!("dns={value}\n"));
         assert_eq!(cfg.errors.len(), 1, "value {value:?}: {:?}", cfg.errors);
         assert!(cfg.dns_servers.is_empty(), "value {value:?} was stored");
@@ -86,7 +96,10 @@ fn test_parse_config_dns_more_than_the_resolver_uses_is_an_error() {
 #[test]
 fn test_format_resolv_conf_lists_one_nameserver_line_per_server_in_order() {
     let cfg = parse_config("dns=10.0.0.53\ndns=fd00::53\n");
-    assert_eq!(format_resolv_conf(&cfg.dns_servers), "nameserver 10.0.0.53\nnameserver fd00::53\n");
+    assert_eq!(
+        format_resolv_conf(&cfg.dns_servers),
+        "nameserver 10.0.0.53\nnameserver fd00::53\n"
+    );
     assert_eq!(format_resolv_conf(&[]), "");
 }
 
