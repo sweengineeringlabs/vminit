@@ -87,8 +87,16 @@ jobs:
         run: |
           cp main/features/bin/target/x86_64-unknown-linux-musl/release/vmfs vmfs
 
+      - name: Check the capability marker against the tag
+        # The binary names its own version in the .note.vminit ELF note. A tag that
+        # differs from main/features/bin/Cargo.toml fails here, before anything is
+        # published. Also writes the capability list for the release notes.
+        run: |
+          python3 scripts/ci/check_release_marker.py vmfs "${GITHUB_REF_NAME}" release-notes.md
+
       - name: Create GitHub Release and upload asset
         uses: softprops/action-gh-release@v2
         with:
           files: vmfs
+          body_path: release-notes.md
           generate_release_notes: true

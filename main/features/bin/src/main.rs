@@ -35,6 +35,7 @@ mod heap;
 mod install;
 #[cfg(feature = "packages")]
 mod manifest;
+mod marker;
 mod mount;
 mod net;
 mod serial;
@@ -97,6 +98,11 @@ fn main_inner() {
 
     mount::mount_pseudofs();
 
+    // Names the build in every boot log; the host reads the same data from the file.
+    // After mount_pseudofs: /dev/ttyS0 does not exist before devtmpfs is mounted, so
+    // anything written earlier is lost (as "vminit starting" above is).
+    serial::serial_write(format!("{}\n", swe_vminit_init::format_own_banner(marker::VERSION)).as_bytes());
+
     let cfg = {
         let mut buf = vec![0u8; 65536];
         let n = unsafe { ffi::read_file(b"/etc/vminit.conf\0".as_ptr(), &mut buf) };
@@ -125,6 +131,12 @@ fn main_inner() {
         net::dhcp_configure("eth0");
     }
     net::configure_loopback();
+
+    // The host's explicit resolver wins over the DHCP lease's; setup_chroot below
+    // copies the file into the rootfs.
+    if !cfg.dns_servers.is_empty() && !net::write_dns_servers(&cfg.dns_servers) {
+        fatal_config(cfg.signal_mode, "cannot write /etc/resolv.conf for the dns= servers");
+    }
 
     #[cfg(feature = "packages")]
     let manifest_text: Option<String> = if let Some(ref url) = cfg.manifest_url {

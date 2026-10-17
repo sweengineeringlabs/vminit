@@ -1,6 +1,10 @@
 use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
+use core::net::IpAddr;
+
+/// Most `dns=` lines accepted: a resolver reads at most three `nameserver` entries.
+pub const MAX_DNS_SERVERS: usize = 3;
 
 /// Whether vminit runs DHCP inside the guest at boot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,6 +77,9 @@ pub struct InitConfig {
     pub cache_base: String,
     /// Whether vminit should run DHCP at boot. Default: Dhcp.
     pub network_mode: GuestNetworkMode,
+    /// DNS servers the host configured with `dns=`, in order. When non-empty they are
+    /// written to `/etc/resolv.conf` after DHCP and replace the lease's server.
+    pub dns_servers: Vec<IpAddr>,
     /// Lines the parser could not honour, one message each (`line N: ...`).
     /// A non-empty list means the config does not say what the host wrote, so the
     /// caller must not run the workload: dropping an `entrypoint_hex=` argument
@@ -97,6 +104,7 @@ impl Default for InitConfig {
             manifest_hash: None,
             cache_base: "https://cache.nixos.org".to_string(),
             network_mode: GuestNetworkMode::Dhcp,
+            dns_servers: Vec::new(),
             errors: Vec::new(),
         }
     }
