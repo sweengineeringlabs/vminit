@@ -142,6 +142,20 @@ pub fn configure_loopback() {
     serial::log("loopback: configured 127.0.0.1/8 on lo");
 }
 
+/// Write the DNS servers the host configured (`dns=`) to `/etc/resolv.conf`, replacing
+/// any server a DHCP lease wrote. Returns false when the file cannot be written.
+pub fn write_dns_servers(servers: &[core::net::IpAddr]) -> bool {
+    let resolv = swe_vminit_init::format_resolv_conf(servers);
+    let written = unsafe {
+        ffi::mkdir(b"/etc\0".as_ptr(), 0o755);
+        ffi::write_file(b"/etc/resolv.conf\0".as_ptr(), resolv.as_bytes())
+    };
+    if written {
+        serial::log(&format!("dns: wrote {} nameserver line(s) to /etc/resolv.conf", servers.len()));
+    }
+    written
+}
+
 fn bring_interface_up(ifname: &str) {
     let sock = unsafe { ffi::socket(ffi::AF_INET, ffi::SOCK_DGRAM, 0) };
     if sock < 0 { return; }

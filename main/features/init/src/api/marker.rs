@@ -29,6 +29,7 @@ pub const CAPABILITIES: &[&str] = &[
     "mount_rootfs",
     "signal_mode",
     "network",
+    "dns",
     "manifest",
     "manifest_url",
     "manifest_hash",

@@ -53,8 +53,10 @@ fn test_parse_config_signal_mode_defaults_to_serial() {
 
 #[test]
 fn test_parse_config_signal_mode_unknown_value_falls_back_to_serial() {
+    // An unknown mode is not honoured, and not silently replaced either: it is an error.
     let cfg = parse_config("signal_mode=unknown_mode\n");
     assert_eq!(cfg.signal_mode, SignalMode::Serial);
+    assert_eq!(cfg.errors.len(), 1, "errors: {:?}", cfg.errors);
 }
 
 #[test]
@@ -142,6 +144,8 @@ fn test_parse_config_manifest_url_http_is_rejected() {
         cfg.manifest_url, None,
         "manifest_url= with plain http:// must be rejected (None)"
     );
+    assert_eq!(cfg.errors.len(), 1, "a refused manifest_url must be reported: {:?}", cfg.errors);
+    assert!(cfg.errors[0].contains("https://"), "got {:?}", cfg.errors[0]);
 }
 
 #[test]
@@ -185,6 +189,7 @@ fn test_parse_config_manifest_hash_empty_value_leaves_none() {
         cfg.manifest_hash, None,
         "manifest_hash= with empty value must leave field as None"
     );
+    assert_eq!(cfg.errors.len(), 1, "an empty manifest_hash must be reported: {:?}", cfg.errors);
 }
 
 #[test]

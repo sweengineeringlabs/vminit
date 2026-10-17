@@ -49,3 +49,7 @@ path = "tests/capability_int_test.rs"
 [[test]]
 name = "marker_int_test"
 path = "tests/marker_int_test.rs"
+
+[[test]]
+name = "config_malformed_test"
+path = "tests/config_malformed_test.rs"

@@ -129,6 +129,12 @@ fn main_inner() {
     }
     net::configure_loopback();
 
+    // The host's explicit resolver wins over the DHCP lease's; setup_chroot below
+    // copies the file into the rootfs.
+    if !cfg.dns_servers.is_empty() && !net::write_dns_servers(&cfg.dns_servers) {
+        fatal_config(cfg.signal_mode, "cannot write /etc/resolv.conf for the dns= servers");
+    }
+
     #[cfg(feature = "packages")]
     let manifest_text: Option<String> = if let Some(ref url) = cfg.manifest_url {
         let http = swe_justpkg_pkg::UreqClient;

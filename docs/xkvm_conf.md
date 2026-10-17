@@ -11,7 +11,30 @@ all defaults.
 - Blank lines and lines beginning with `#` are ignored
 - Keys are case-sensitive, lower-snake-case
 - `value` is everything after the first `=` on the line (may itself contain `=`)
-- Unknown keys are silently ignored — forward-compatible with newer vminit builds
+- A line with a key this vminit does not list, a line without `=`, and a line of a known
+  key whose value cannot be honoured are **errors** (see "Errors" below). Only blank lines
+  and `#` comments are skipped.
+- The keys a build lists are its *capabilities*. The host reads them from the file (see
+  "Capability marker") before it boots a guest.
+
+## Errors
+
+vminit parses the whole file, collects one message per bad line (`line N: ...`, naming
+the key but never the value), logs `FATAL: /etc/vminit.conf: line N: ...`, reports exit
+code 1 and powers off, without running the workload. Rationale: a line the guest cannot
+honour (an argument, a variable, a mount, a resolver) used to be dropped silently, so
+the guest ran a different workload than the host asked for (vmruntime#437: an
+`entrypoint_hex=` line sent to a vminit that predates it). Failing closed is the safe
+direction; the host-side capability check refuses earlier, before the guest boots.
+
+This replaces the earlier rule "unknown keys are silently ignored (forward
+compatible)". A writer must therefore not emit a key the target `vmfs` does not list;
+check the marker first. Value rules that are now errors rather than silent drops:
+`env` without `NAME=` or with an empty name; `volume` / `block_mount` without three
+non-empty fields; `volume` access other than `rw`/`ro`; `interactive`, `start_agent`,
+`mount_rootfs` other than `0`/`1`; `signal_mode` other than `serial`/`shared_memory`;
+`network` other than `dhcp`/`none`; `dns` that is not an IP address; `manifest_url` that
+is not `https://`; an empty `install`, `manifest`, `manifest_hash` or `cache_base`.
 
 ## Keys
 
@@ -56,8 +79,9 @@ entrypoint=-c
 entrypoint_hex=6563686f20410a6563686f2042
 ```
 
-An older vminit ignores this key (unknown keys are skipped), so a writer must not emit
-it for a vminit that predates it.
+A vminit older than v0.1.6 ignores this key (it also ignored every unknown key), so a
+writer must check the capability marker for `entrypoint_hex` before emitting it. vminit
+v0.1.5 has the key but no marker, so its capabilities read as unknown.
 
 ---
 
@@ -115,7 +139,7 @@ install=jq
 
 ### `interactive`
 
-**Type:** boolean (`1` = true, any other value = false)  
+**Type:** boolean (`1` = true, `0` = false; anything else is an error)  
 **Default:** `0`
 
 When `1`, vminit allocates a PTY and attaches stdin/stdout to the workload's
@@ -129,7 +153,7 @@ interactive=1
 
 ### `start_agent`
 
-**Type:** boolean (`1` = true, any other value = false)  
+**Type:** boolean (`1` = true, `0` = false; anything else is an error)  
 **Default:** `0`
 
 When `1`, vminit launches the `xkvm-agent` sidecar before starting the
@@ -142,24 +166,102 @@ start_agent=1
 
 ---
 
-### `kali_mode`
+### `mount_rootfs`
 
-**Type:** boolean (`1` = true, any other value = false)  
+**Type:** boolean (`1` = true, `0` = false; anything else is an error)  
 **Default:** `0`
 
-When `1`, vminit applies Kali Linux-specific boot adjustments (service
-ordering, default tool paths). Only meaningful when the guest rootfs is a Kali
-image.
+When `1`, vminit mounts the root filesystem from the block device `/dev/vda`, applies
+the overlay, and runs the workload chrooted into it.
 
 ```
-kali_mode=1
+mount_rootfs=1
 ```
+
+---
+
+### `block_mount`
+
+**Type:** `device:mountpoint:fstype` string (repeated)  
+**Default:** none
+
+Mount a block device before the workload starts. All three fields must be non-empty.
+
+```
+block_mount=/dev/vdb:/data:ext4
+```
+
+---
+
+### `network`
+
+**Type:** enum — `dhcp` | `none`  
+**Default:** `dhcp`
+
+`dhcp` runs a DHCP exchange on `eth0` at boot; `none` skips network configuration
+(the loopback interface is still configured).
+
+```
+network=none
+```
+
+---
+
+### `dns`
+
+**Type:** IPv4 or IPv6 address (repeated, at most 3)  
+**Default:** none (the DNS server of the DHCP lease, if any)
+
+DNS servers for the guest. After network configuration vminit writes one
+`nameserver <address>` line per `dns=` line, in order, to `/etc/resolv.conf`,
+replacing the lease's server, and the file is copied into the rootfs when
+`mount_rootfs=1`. A value that is not an IP address, or a fourth line, is an error.
+vminit v0.1.6 is the first release that honours this key (earlier releases dropped it).
+
+```
+dns=10.0.2.3
+dns=2001:4860:4860::8888
+```
+
+---
+
+### `manifest_url`
+
+**Type:** `https://` URL  
+**Default:** none
+
+URL of the package manifest, fetched at boot (builds with the `packages` feature).
+Takes precedence over `manifest=`. A URL that does not start with `https://` is an error.
+
+```
+manifest_url=https://deploy.internal/manifest.json
+```
+
+---
+
+### `manifest_hash`
+
+**Type:** `sha256:<64 hex digits>`  
+**Default:** none
+
+Expected SHA-256 of the manifest; a mismatch aborts the boot. An empty value is an error.
+
+```
+manifest_hash=sha256:b94d27b9934d3e08a52e52d7da7dabfac484efe04294e576f4be72b4db32f73e
+```
+
+---
+
+### `kali_mode` (not supported)
+
+Earlier versions of this document listed `kali_mode`. vminit has never implemented it;
+it is not in the capability list, so a `kali_mode=` line is an unknown-key error.
 
 ---
 
 ### `signal_mode`
 
-**Type:** enum — `serial` | `shared_memory`  
+**Type:** enum — `serial` | `shared_memory` (anything else is an error)  
 **Default:** `serial`
 
 Controls how vminit communicates lifecycle signals (`XIKA_READY`, `XIKA_EXIT:N`)
@@ -233,3 +335,91 @@ cache_base=https://cache.nixos.org
 `main/features/init/src/spi/config.rs` — pure function, no filesystem access.
 The binary (`main/features/bin/`) reads the file and passes the text to
 `parse_config`.
+
+## Capability marker
+
+Every `vmfs` from v0.1.6 on carries a machine-readable marker so a host can check what
+it supports **without executing it**. The host checks for the capability it needs (a
+config key name such as `entrypoint_hex`), not for a version number, and refuses before
+booting a guest, naming the capability and the release that has it. A `vmfs` with no
+marker (v0.1.5 and earlier) has *unknown* capabilities.
+
+The capability list is `swe_vminit_init::CAPABILITIES`: the parser refuses any key not
+in it, the marker embeds it, and the boot banner prints it. Current list (v0.1.6):
+`entrypoint`, `entrypoint_hex`, `env`, `volume`, `block_mount`, `install`, `interactive`,
+`start_agent`, `mount_rootfs`, `signal_mode`, `network`, `dns`, `manifest`,
+`manifest_url`, `manifest_hash`, `cache_base`.
+
+### Where it is
+
+An ELF note in the allocated section `.note.vminit`, therefore in a `PT_NOTE` program
+header segment. A host reads the `PT_NOTE` segments (section headers are not needed and
+may be stripped), finds the note with owner name `vminit` and type `1`, and decodes the
+payload. `strip` keeps it because the section is allocated.
+
+### Note layout
+
+All integers are little-endian (the file is x86_64). Standard ELF note framing:
+
+| Offset | Size | Field |
+|---|---|---|
+| 0 | 4 | `namesz` = 7 (`"vminit"` and its NUL) |
+| 4 | 4 | `descsz` = payload length, not counting padding |
+| 8 | 4 | `type` = 1 |
+| 12 | 8 | name `"vminit\0"` padded with zeros to a multiple of 4 |
+| 20 | `descsz`, padded with zeros to a multiple of 4 | payload |
+
+A segment can hold other notes (for example a GNU build id) before or after it: walk
+the segment, step over each note by `12 + pad(namesz) + pad(descsz)`, and use the
+segment's `p_align` (4, or 8 when it says 8) as the padding unit. A note with another
+owner or type is skipped.
+
+### Payload, format version 1
+
+| Field | Size | Meaning |
+|---|---|---|
+| `format_version` | u32 | 1. **A reader that finds another value must report "unsupported format" and not guess.** |
+| `version_len`, `version` | u16, bytes | UTF-8 package version, for example `0.1.6` |
+| `capability_count` | u16 | number of capabilities |
+| per capability: `len`, `name` | u16, bytes | UTF-8 config key |
+
+The payload ends exactly after the last capability; extra bytes are malformed. A new
+layout is a new `format_version`; a reader treats a note it does not understand as
+"capabilities unknown", the same as no marker.
+
+### Reading it
+
+Rust, from this repository's `swe_vminit_init` crate (a `no_std` crate; the reader is
+`alloc`-only and bounds-checked, so a truncated or hostile file gives an error):
+
+```rust
+use swe_vminit_init::{read_marker, MarkerError};
+
+let file = std::fs::read("downloads/vmfs")?;
+match read_marker(&file) {
+    Ok(marker) if marker.has_capability("entrypoint_hex") => { /* supported */ }
+    Ok(marker) => { /* refuse: names marker.version, lacks the capability */ }
+    Err(MarkerError::NoMarker) => { /* v0.1.5 or earlier: capabilities unknown */ }
+    Err(other) => { /* truncated, not ELF64, unsupported format, malformed */ }
+}
+```
+
+Any language: `scripts/ci/check_release_marker.py` is a standard-library-only decoder
+of the same format (CI uses it on the release binary). By eye:
+
+```
+readelf -n vmfs                      # lists the note: owner vminit, type 0x1
+readelf -x .note.vminit vmfs         # the raw bytes
+```
+
+### Boot banner
+
+At start, before `XIKA_READY`, vminit prints one line on the serial console, so every
+boot log shows what ran: `vminit <version> capabilities=<comma separated list>`. The
+`XIKA_READY` and `XIKA_EXIT:N` lines are unchanged.
+
+### Release check
+
+The release workflow decodes the marker of the binary it is about to publish, fails if
+its version is not the tag without the leading `v`, and puts the capability list in the
+release notes. The version comes from `main/features/bin/Cargo.toml`.

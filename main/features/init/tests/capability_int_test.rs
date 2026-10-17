@@ -18,6 +18,7 @@ const CASES: &[(&str, &str, fn(&InitConfig) -> bool)] = &[
     ("mount_rootfs", "mount_rootfs=1", |c| c.mount_rootfs),
     ("signal_mode", "signal_mode=shared_memory", |c| c.signal_mode == SignalMode::SharedMemory),
     ("network", "network=none", |c| c.network_mode == GuestNetworkMode::None),
+    ("dns", "dns=10.0.0.53", |c| c.dns_servers.len() == 1 && c.dns_servers[0].to_string() == "10.0.0.53"),
     ("manifest", "manifest=/etc/packages.json", |c| c.manifest_path.as_deref() == Some("/etc/packages.json")),
     ("manifest_url", "manifest_url=https://h/m.json", |c| c.manifest_url.as_deref() == Some("https://h/m.json")),
     ("manifest_hash", "manifest_hash=sha256:ab", |c| c.manifest_hash.as_deref() == Some("sha256:ab")),

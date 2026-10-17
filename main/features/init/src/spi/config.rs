@@ -12,23 +12,28 @@
 //!   volume=tag:mountpoint:rw|ro
 //!   block_mount=device:mountpoint:fstype
 //!   install=<package>
-//!   interactive=1
-//!   start_agent=1
-//!   mount_rootfs=1
+//!   interactive=0|1
+//!   start_agent=0|1
+//!   mount_rootfs=0|1
 //!   signal_mode=serial|shared_memory
 //!   network=dhcp|none
+//!   dns=<IPv4 or IPv6 address>   (may appear up to MAX_DNS_SERVERS times)
 //!   manifest=/etc/packages.json
 //!   manifest_url=https://deploy.internal/manifest.json
 //!   manifest_hash=sha256:<64-hex-chars>
 //!   cache_base=https://cache.nixos.org
 //!
-//! The keys above are exactly `CAPABILITIES`; a line with any other key is an error.
+//! The keys above are exactly `CAPABILITIES`; a line with any other key is an error,
+//! and so is a line of a known key whose value cannot be honoured.
 
 use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use core::net::IpAddr;
 
-use crate::api::config::{BlockMount, GuestNetworkMode, InitConfig, SignalMode, VolumeSpec};
+use crate::api::config::{
+    BlockMount, GuestNetworkMode, InitConfig, SignalMode, VolumeSpec, MAX_DNS_SERVERS,
+};
 use crate::api::marker::CAPABILITIES;
 
 /// Longest key quoted back in an error message; a longer one is cut (at a character
@@ -73,15 +78,136 @@ fn quote_key(key: &str) -> &str {
     &key[..end]
 }
 
+/// Parse a `0`/`1` flag; anything else is an error naming the key.
+fn parse_flag(key: &str, val: &str) -> Result<bool, String> {
+    match val {
+        "1" => Ok(true),
+        "0" => Ok(false),
+        _ => Err(format!("{} must be 0 or 1", key)),
+    }
+}
+
+/// Split `a:b:c` into three non-empty fields; the third may itself contain colons.
+fn split_three_fields<'a>(key: &str, val: &'a str, shape: &str) -> Result<[&'a str; 3], String> {
+    let mut parts = val.splitn(3, ':');
+    match (parts.next(), parts.next(), parts.next()) {
+        (Some(a), Some(b), Some(c)) if !a.is_empty() && !b.is_empty() && !c.is_empty() => Ok([a, b, c]),
+        _ => Err(format!("{} must be {} with three non-empty fields", key, shape)),
+    }
+}
+
+/// Apply one `key=value` line whose key is in `CAPABILITIES`. `Err` is the reason the
+/// value cannot be honoured.
+fn apply_line(config: &mut InitConfig, key: &str, val: &str) -> Result<(), String> {
+    match key {
+        "entrypoint" => config.entrypoint.push(val.to_string()),
+        "entrypoint_hex" => config.entrypoint.push(decode_hex_argument(val)?),
+        "env" => match val.find('=') {
+            Some(pos) if pos > 0 => config.env.push((val[..pos].to_string(), val[pos + 1..].to_string())),
+            _ => return Err("env must be NAME=VALUE with a non-empty NAME".to_string()),
+        },
+        "volume" => {
+            let [tag, guest_mount, mode] = split_three_fields(key, val, "tag:mountpoint:rw|ro")?;
+            let read_only = match mode {
+                "ro" => true,
+                "rw" => false,
+                _ => return Err("volume access must be rw or ro".to_string()),
+            };
+            config.volumes.push(VolumeSpec {
+                tag: tag.to_string(),
+                guest_mount: guest_mount.to_string(),
+                read_only,
+            });
+        }
+        "block_mount" => {
+            let [device, guest_mount, fstype] = split_three_fields(key, val, "device:mountpoint:fstype")?;
+            config.block_mounts.push(BlockMount {
+                device: device.to_string(),
+                guest_mount: guest_mount.to_string(),
+                fstype: fstype.to_string(),
+            });
+        }
+        "install" => {
+            if val.is_empty() {
+                return Err("install needs a package name".to_string());
+            }
+            config.packages.push(val.to_string());
+        }
+        "interactive" => config.interactive = parse_flag(key, val)?,
+        "start_agent" => config.start_agent = parse_flag(key, val)?,
+        "mount_rootfs" => config.mount_rootfs = parse_flag(key, val)?,
+        "signal_mode" => {
+            config.signal_mode = match val {
+                "serial" => SignalMode::Serial,
+                "shared_memory" => SignalMode::SharedMemory,
+                _ => return Err("signal_mode must be serial or shared_memory".to_string()),
+            };
+        }
+        "network" => {
+            config.network_mode = match val {
+                "dhcp" => GuestNetworkMode::Dhcp,
+                "none" => GuestNetworkMode::None,
+                _ => return Err("network must be dhcp or none".to_string()),
+            };
+        }
+        "dns" => {
+            let address: IpAddr = val.parse().map_err(|_| "dns must be an IPv4 or IPv6 address".to_string())?;
+            if config.dns_servers.len() >= MAX_DNS_SERVERS {
+                return Err(format!("dns may appear at most {} times (the resolver uses no more)", MAX_DNS_SERVERS));
+            }
+            config.dns_servers.push(address);
+        }
+        "manifest" => {
+            if val.is_empty() {
+                return Err("manifest needs a path".to_string());
+            }
+            config.manifest_path = Some(val.to_string());
+        }
+        "manifest_url" => {
+            if !val.starts_with("https://") {
+                return Err("manifest_url must start with https:// (plain http is refused)".to_string());
+            }
+            config.manifest_url = Some(val.to_string());
+        }
+        "manifest_hash" => {
+            if val.is_empty() {
+                return Err("manifest_hash needs a value such as sha256:<hex>".to_string());
+            }
+            config.manifest_hash = Some(val.to_string());
+        }
+        "cache_base" => {
+            if val.is_empty() {
+                return Err("cache_base needs a URL".to_string());
+            }
+            config.cache_base = val.to_string();
+        }
+        // A key in CAPABILITIES with no arm above: the list promises a capability
+        // the parser does not provide, so refuse the line like an unknown key.
+        _ => return Err(format!("\"{}\" is listed as a capability but has no parser", quote_key(key))),
+    }
+    Ok(())
+}
+
+/// Render `/etc/resolv.conf` for explicitly configured DNS servers: one `nameserver`
+/// line each, in order.
+pub fn format_resolv_conf(servers: &[IpAddr]) -> String {
+    let mut text = String::new();
+    for server in servers {
+        text.push_str(&format!("nameserver {}\n", server));
+    }
+    text
+}
+
 /// Parse /etc/vminit.conf text into an InitConfig.
 /// Blank lines and `#` comments are skipped. Missing file (empty string) returns default.
 ///
-/// Every other line must be `key=value` with a key in `CAPABILITIES`. A line that is
-/// not, or whose key this build does not list, is recorded in `InitConfig::errors`
-/// and never skipped silently: an unknown key may carry meaning the host depends on
-/// (an argument, an environment variable, a mount), and running without it would be a
-/// different workload than the host asked for. A line of a known key whose value
-/// cannot be honoured (`entrypoint_hex=` that is not hex) is recorded the same way.
+/// Every other line must be `key=value` with a key in `CAPABILITIES` and a value that
+/// key can honour. A line that is not, or whose key this build does not list, or whose
+/// value is malformed, is recorded in `InitConfig::errors` and never skipped silently:
+/// the line may carry meaning the host depends on (an argument, an environment
+/// variable, a mount, a resolver), and running without it would be a different
+/// workload than the host asked for. The caller must refuse to boot when `errors` is
+/// not empty.
 pub fn parse_config(text: &str) -> InitConfig {
     let mut config = InitConfig::default();
 
@@ -103,77 +229,8 @@ pub fn parse_config(text: &str) -> InitConfig {
             ));
             continue;
         }
-
-        match key {
-            "entrypoint" => config.entrypoint.push(val.to_string()),
-            "entrypoint_hex" => match decode_hex_argument(val) {
-                Ok(argument) => config.entrypoint.push(argument),
-                Err(reason) => config.errors.push(format!("line {}: {}", index + 1, reason)),
-            },
-            "env" => {
-                if let Some(pos) = val.find('=') {
-                    config.env.push((val[..pos].to_string(), val[pos + 1..].to_string()));
-                }
-            }
-            "volume" => {
-                let parts: Vec<&str> = val.splitn(3, ':').collect();
-                if parts.len() == 3 {
-                    config.volumes.push(VolumeSpec {
-                        tag: parts[0].to_string(),
-                        guest_mount: parts[1].to_string(),
-                        read_only: parts[2] == "ro",
-                    });
-                }
-            }
-            "block_mount" => {
-                let parts: Vec<&str> = val.splitn(3, ':').collect();
-                if parts.len() == 3 {
-                    config.block_mounts.push(BlockMount {
-                        device: parts[0].to_string(),
-                        guest_mount: parts[1].to_string(),
-                        fstype: parts[2].to_string(),
-                    });
-                }
-            }
-            "install" => config.packages.push(val.to_string()),
-            "interactive" => config.interactive = val == "1",
-            "start_agent" => config.start_agent = val == "1",
-            "mount_rootfs" => config.mount_rootfs = val == "1",
-            "signal_mode" => {
-                config.signal_mode = match val {
-                    "shared_memory" => SignalMode::SharedMemory,
-                    _ => SignalMode::Serial,
-                };
-            }
-            "network" => {
-                config.network_mode = match val {
-                    "none" => GuestNetworkMode::None,
-                    _ => GuestNetworkMode::Dhcp,
-                };
-            }
-            "manifest" => config.manifest_path = Some(val.to_string()),
-            "manifest_url" => {
-                if val.starts_with("https://") {
-                    config.manifest_url = Some(val.to_string());
-                }
-            }
-            "manifest_hash" => {
-                if !val.is_empty() {
-                    config.manifest_hash = Some(val.to_string());
-                }
-            }
-            "cache_base" => {
-                if !val.is_empty() {
-                    config.cache_base = val.to_string();
-                }
-            }
-            // A key in CAPABILITIES with no arm above: the list promises a capability
-            // the parser does not provide, so refuse the line like an unknown key.
-            _ => config.errors.push(format!(
-                "line {}: key \"{}\" is listed as a capability but has no parser",
-                index + 1,
-                quote_key(key)
-            )),
+        if let Err(reason) = apply_line(&mut config, key, val) {
+            config.errors.push(format!("line {}: {}", index + 1, reason));
         }
     }
 
