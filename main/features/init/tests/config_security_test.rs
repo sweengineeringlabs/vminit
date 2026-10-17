@@ -99,7 +99,7 @@ fn test_parse_config_unknown_key_is_an_error_naming_line_and_key() {
     let cfg = parse_config("entrypoint=/bin/true\nfuture_key=1\n");
     assert_eq!(cfg.errors.len(), 1, "errors: {:?}", cfg.errors);
     assert!(cfg.errors[0].starts_with("line 2:"), "got {:?}", cfg.errors[0]);
-    assert!(cfg.errors[0].contains("\"future_key\""), "got {:?}", cfg.errors[0]);
+    assert!(cfg.errors[0].contains("unknown key \"future_key\""), "got {:?}", cfg.errors[0]);
 }
 
 #[test]
