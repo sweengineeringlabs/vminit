@@ -14,6 +14,19 @@ fn test_parse_config_env_splits_on_first_equals() {
 }
 
 #[test]
+fn test_parse_config_env_preserves_trailing_whitespace_in_value() {
+    let cfg = parse_config("env=GREETING=hello world  \nenv=PADDED=  spaced  \n");
+    assert_eq!(cfg.env[0], ("GREETING".into(), "hello world  ".into()));
+    assert_eq!(cfg.env[1], ("PADDED".into(), "  spaced  ".into()));
+}
+
+#[test]
+fn test_parse_config_entrypoint_preserves_trailing_whitespace() {
+    let cfg = parse_config("entrypoint=echo   \nentrypoint=hello world \n");
+    assert_eq!(cfg.entrypoint, vec!["echo   ", "hello world "]);
+}
+
+#[test]
 fn test_parse_config_volume_read_write_flag() {
     let cfg = parse_config("volume=host0:/mnt/data:rw\nvolume=host1:/mnt/ro:ro\n");
     assert_eq!(cfg.volumes.len(), 2);

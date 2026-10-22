@@ -106,14 +106,24 @@ fn split_three_fields<'a>(key: &str, val: &'a str, shape: &str) -> Result<[&'a s
 
 /// Apply one `key=value` line whose key is in `CAPABILITIES`. `Err` is the reason the
 /// value cannot be honoured.
-fn apply_line(config: &mut InitConfig, key: &str, val: &str) -> Result<(), String> {
+fn apply_line(config: &mut InitConfig, key: &str, raw_val: &str) -> Result<(), String> {
+    let val = match key {
+        "entrypoint" | "env" => raw_val,
+        _ => raw_val.trim_end(),
+    };
     match key {
         "entrypoint" => config.entrypoint.push(val.to_string()),
         "entrypoint_hex" => config.entrypoint.push(decode_hex_argument(val)?),
         "env" => match val.find('=') {
-            Some(pos) if pos > 0 => config
-                .env
-                .push((val[..pos].to_string(), val[pos + 1..].to_string())),
+            Some(pos) if pos > 0 => {
+                let name = val[..pos].trim();
+                if name.is_empty() {
+                    return Err("env must be NAME=VALUE with a non-empty NAME".to_string());
+                }
+                config
+                    .env
+                    .push((name.to_string(), val[pos + 1..].to_string()))
+            }
             _ => return Err("env must be NAME=VALUE with a non-empty NAME".to_string()),
         },
         "volume" => {
@@ -234,8 +244,8 @@ pub fn format_resolv_conf(servers: &[IpAddr]) -> String {
 pub fn parse_config(text: &str) -> InitConfig {
     let mut config = InitConfig::default();
 
-    for (index, line) in text.lines().enumerate() {
-        let line = line.trim();
+    for (index, raw_line) in text.lines().enumerate() {
+        let line = raw_line.trim_start();
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
