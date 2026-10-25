@@ -17,6 +17,7 @@
 //!   manifest_url=https://deploy.internal/manifest.json
 //!   manifest_hash=sha256:<64-hex-chars>
 //!   cache_base=https://cache.nixos.org
+//!   dns=10.0.0.1
 
 use alloc::string::ToString;
 use alloc::vec::Vec;
@@ -89,6 +90,10 @@ pub fn parse_config(text: &str) -> InitConfig {
         } else if let Some(val) = line.strip_prefix("cache_base=") {
             if !val.is_empty() {
                 config.cache_base = val.to_string();
+            }
+        } else if let Some(val) = line.strip_prefix("dns=") {
+            if !val.is_empty() {
+                config.dns_server = Some(val.to_string());
             }
         }
     }

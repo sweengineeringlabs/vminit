@@ -106,6 +106,13 @@ fn main_inner() {
     }
     net::configure_loopback();
 
+    // Static DNS override (#121): write /etc/resolv.conf after DHCP so the
+    // Fleet DNS server address takes precedence over any DHCP-assigned DNS.
+    if let Some(ref dns) = cfg.dns_server {
+        let resolv = alloc::format!("nameserver {}\n", dns);
+        unsafe { ffi::write_file(b"/etc/resolv.conf\0".as_ptr(), resolv.as_bytes()); }
+    }
+
     #[cfg(feature = "packages")]
     let manifest_text: Option<String> = if let Some(ref url) = cfg.manifest_url {
         let http = swe_justpkg_pkg::UreqClient;

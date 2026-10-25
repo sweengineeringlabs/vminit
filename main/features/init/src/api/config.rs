@@ -73,6 +73,10 @@ pub struct InitConfig {
     pub cache_base: String,
     /// Whether vminit should run DHCP at boot. Default: Dhcp.
     pub network_mode: GuestNetworkMode,
+    /// Static DNS server to write into /etc/resolv.conf at boot (#121).
+    /// When set, overrides any DHCP-assigned DNS. Intended for Fleet-managed
+    /// VMs resolving `<service>.fleet.local` via the Fleet DNS server.
+    pub dns_server: Option<String>,
 }
 
 impl Default for InitConfig {
@@ -92,6 +96,7 @@ impl Default for InitConfig {
             manifest_hash: None,
             cache_base: "https://cache.nixos.org".to_string(),
             network_mode: GuestNetworkMode::Dhcp,
+            dns_server: None,
         }
     }
 }
