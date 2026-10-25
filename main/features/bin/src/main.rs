@@ -40,6 +40,9 @@ mod mount;
 mod net;
 mod serial;
 
+/// Maximum size of /etc/vminit.conf read at boot (256 KiB).
+const MAX_CONFIG_BUFFER_SIZE: usize = 262_144;
+
 // ── no_std entry point ────────────────────────────────────────────────────────
 
 #[cfg(not(feature = "packages"))]
@@ -104,7 +107,7 @@ fn main_inner() {
     serial::serial_write(format!("{}\n", swe_vminit_init::format_own_banner(marker::VERSION)).as_bytes());
 
     let cfg = {
-        let mut buf = vec![0u8; 65536];
+        let mut buf = vec![0u8; MAX_CONFIG_BUFFER_SIZE];
         let n = unsafe { ffi::read_file(b"/etc/vminit.conf\0".as_ptr(), &mut buf) };
         let text = if n > 0 {
             String::from_utf8_lossy(&buf[..n as usize]).into_owned()

@@ -69,7 +69,7 @@ One element of `argv`, written as the hex digits (either case) of its bytes. Lin
 be UTF-8 and must not contain NUL (execve cannot carry one); an empty value is an empty
 argument. A value that is not valid is a boot error, never a skipped argument: vminit
 logs `FATAL: /etc/vminit.conf: line N: ...`, reports exit code 1 and powers off. The same
-happens when `/etc/vminit.conf` fills the 65,536-byte read buffer, because the file
+happens when `/etc/vminit.conf` fills the 262,144-byte (256 KiB) read buffer, because the file
 may have been cut mid-line.
 
 ```
