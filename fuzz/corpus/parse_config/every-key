@@ -1,0 +1,17 @@
+entrypoint=/bin/sh
+entrypoint=-c
+entrypoint_hex=68656c6c6f
+env=PATH=/usr/bin
+volume=data:/data:rw
+block_mount=/dev/vdb:/mnt:ext4
+install=busybox
+interactive=0
+start_agent=1
+mount_rootfs=1
+signal_mode=serial
+network=dhcp
+dns=1.1.1.1
+manifest=/etc/packages.json
+manifest_url=https://deploy.internal/manifest.json
+manifest_hash=sha256:abababababababababababababababababababababababababababababababab
+cache_base=https://cache.nixos.org

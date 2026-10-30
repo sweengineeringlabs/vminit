@@ -1,0 +1,2 @@
+/etc/hosts:0644:0:0
+/usr/local/bin/tool:0755:1000:1000

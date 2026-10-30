@@ -1,0 +1,9 @@
+# a comment
+
+unknown=1
+no equals sign
+volume=only:two
+env=NOEQUALS
+entrypoint_hex=abc
+entrypoint_hex=zz
+signal_mode=smoke

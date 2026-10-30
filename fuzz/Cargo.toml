@@ -1,0 +1,45 @@
+[package]
+name = "vminit_fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "cargo-fuzz targets for the init's parsers of guest-controlled bytes (vminit#13)"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+swe_vminit_init = { path = "../main/features/init" }
+
+# its own workspace: the fuzz crate is built with a nightly toolchain and is not part of the init's workspace
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "read_marker"
+path = "fuzz_targets/read_marker.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_dhcp_response"
+path = "fuzz_targets/parse_dhcp_response.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_config"
+path = "fuzz_targets/parse_config.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_overlay_manifest"
+path = "fuzz_targets/parse_overlay_manifest.rs"
+test = false
+doc = false
+bench = false

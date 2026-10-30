@@ -1,0 +1,4 @@
+# overlay
+
+  /etc/motd:0644:0:0  
+# end
