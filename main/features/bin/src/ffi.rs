@@ -246,6 +246,8 @@ const SYS_UMOUNT2: usize = 166;
 const SYS_REBOOT: usize = 169;
 const SYS_SYNC: usize = 162;
 const SYS_EXIT_GROUP: usize = 231;
+const SYS_CLOCK_GETTIME: usize = 228;
+const SYS_GETRANDOM: usize = 318;
 #[cfg(not(feature = "packages"))]
 const SYS_MMAP: usize = 9;
 
@@ -372,6 +374,24 @@ pub unsafe fn exit_group(code: i32) -> ! {
 pub unsafe fn nanosleep_ms(ms: u64) {
     let ts = Timespec { tv_sec: (ms / 1000) as i64, tv_nsec: ((ms % 1000) * 1_000_000) as i64 };
     sc2(SYS_NANOSLEEP, &ts as *const Timespec as usize, 0);
+}
+
+const CLOCK_MONOTONIC: usize = 1;
+const GRND_NONBLOCK: usize = 1;
+
+/// Milliseconds on the monotonic clock, or 0 when it cannot be read.
+pub unsafe fn monotonic_ms() -> u64 {
+    let mut ts = Timespec { tv_sec: 0, tv_nsec: 0 };
+    if sc2(SYS_CLOCK_GETTIME, CLOCK_MONOTONIC, &mut ts as *mut Timespec as usize) != 0 {
+        return 0;
+    }
+    (ts.tv_sec as u64) * 1000 + (ts.tv_nsec as u64) / 1_000_000
+}
+
+/// Fill `buf` from the kernel's random pool without waiting for it to be ready. Returns the
+/// number of bytes written, or a negative errno (-EAGAIN while the pool is not ready).
+pub unsafe fn getrandom_nonblock(buf: &mut [u8]) -> isize {
+    sc3(SYS_GETRANDOM, buf.as_mut_ptr() as usize, buf.len(), GRND_NONBLOCK)
 }
 
 /// Write all of `data` to `path` (create/truncate). Returns true on success.

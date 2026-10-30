@@ -53,3 +53,7 @@ path = "tests/marker_int_test.rs"
 [[test]]
 name = "config_malformed_test"
 path = "tests/config_malformed_test.rs"
+
+[[test]]
+name = "dhcp_int_test"
+path = "tests/dhcp_int_test.rs"

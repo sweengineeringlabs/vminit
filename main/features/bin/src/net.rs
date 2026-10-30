@@ -1,75 +1,112 @@
 //! DHCP client and network configuration.
 //!
-//! Minimal DHCP DISCOVER/OFFER/REQUEST/ACK exchange via raw UDP socket.
-//! Configures the network interface and adds a default route via netlink.
+//! The DHCP exchange itself (waiting for the link, DISCOVER/OFFER/REQUEST/ACK, sending again when
+//! no reply comes) lives in `swe_vminit_init::acquire_lease` and is tested there. This file
+//! supplies what it runs over, a broadcast UDP socket bound to the interface plus sysfs, and
+//! applies the lease it returns: the address, the default route by netlink, and the resolver.
 
-#[cfg(not(feature = "packages"))]
-use alloc::vec::Vec;
+use swe_vminit_init::{acquire_lease, CarrierState, DhcpFailure, DhcpLink, DhcpPolicy};
 
 use crate::ffi;
 use crate::serial;
 
 const DHCP_SERVER_PORT: u16 = 67;
 const DHCP_CLIENT_PORT: u16 = 68;
-const DHCP_MAGIC_COOKIE: [u8; 4] = [99, 130, 83, 99];
-const DHCP_DISCOVER: u8 = 1;
-const DHCP_OFFER: u8 = 2;
-const DHCP_REQUEST: u8 = 3;
-const DHCP_ACK: u8 = 5;
-const BOOTP_REQUEST: u8 = 1;
-const OPT_SUBNET_MASK: u8 = 1;
-const OPT_ROUTER: u8 = 3;
-const OPT_DNS: u8 = 6;
-const OPT_MSG_TYPE: u8 = 53;
-const OPT_SERVER_ID: u8 = 54;
-const OPT_END: u8 = 255;
 
-struct DhcpLease { ip: u32, mask: u32, gateway: u32, dns: u32, server_id: u32 }
+/// `recvfrom` result when the receive timeout ran out with nothing to read (-EAGAIN).
+const RECV_TIMED_OUT: isize = -11;
 
-fn build_dhcp_packet(msg_type: u8, xid: u32, requested_ip: u32, server_id: u32) -> Vec<u8> {
-    let mut pkt = vec![0u8; 300];
-    pkt[0] = BOOTP_REQUEST; pkt[1] = 1; pkt[2] = 6;
-    pkt[4..8].copy_from_slice(&xid.to_be_bytes());
-    pkt[236..240].copy_from_slice(&DHCP_MAGIC_COOKIE);
-    let mut off = 240;
-    pkt[off] = OPT_MSG_TYPE; pkt[off + 1] = 1; pkt[off + 2] = msg_type; off += 3;
-    if msg_type == DHCP_REQUEST {
-        pkt[off] = 50; pkt[off + 1] = 4;
-        pkt[off + 2..off + 6].copy_from_slice(&requested_ip.to_be_bytes()); off += 6;
-        pkt[off] = OPT_SERVER_ID; pkt[off + 1] = 4;
-        pkt[off + 2..off + 6].copy_from_slice(&server_id.to_be_bytes()); off += 6;
-    }
-    pkt[off] = OPT_END; off += 1;
-    pkt.truncate(off);
-    pkt
+/// What the DHCP exchange runs over: a broadcast UDP socket bound to the interface.
+struct SocketLink<'a> {
+    sock: i32,
+    ifname: &'a str,
+    broadcast_addr: ffi::SockaddrIn,
+    /// Time kept by our own pauses and waits, used only when the monotonic clock cannot be read.
+    fallback_ms: u64,
+    /// Mixed into random numbers drawn without the kernel's pool.
+    counter: u32,
 }
 
-fn parse_dhcp_response(data: &[u8]) -> Option<(u8, DhcpLease)> {
-    if data.len() < 240 || data[236..240] != DHCP_MAGIC_COOKIE { return None; }
-    let offered_ip = u32::from_be_bytes([data[16], data[17], data[18], data[19]]);
-    let mut msg_type = 0u8;
-    let mut mask = 0u32; let mut gateway = 0u32; let mut dns = 0u32; let mut server_id = 0u32;
-    let mut off = 240;
-    while off < data.len() {
-        let opt = data[off];
-        if opt == OPT_END { break; }
-        if opt == 0 { off += 1; continue; }
-        if off + 1 >= data.len() { break; }
-        let len = data[off + 1] as usize;
-        let val_start = off + 2;
-        let val_end = val_start + len;
-        if val_end > data.len() { break; }
-        match opt {
-            OPT_MSG_TYPE if len >= 1 => msg_type = data[val_start],
-            OPT_SUBNET_MASK if len >= 4 => mask = u32::from_be_bytes([data[val_start], data[val_start+1], data[val_start+2], data[val_start+3]]),
-            OPT_ROUTER if len >= 4 => gateway = u32::from_be_bytes([data[val_start], data[val_start+1], data[val_start+2], data[val_start+3]]),
-            OPT_DNS if len >= 4 => dns = u32::from_be_bytes([data[val_start], data[val_start+1], data[val_start+2], data[val_start+3]]),
-            OPT_SERVER_ID if len >= 4 => server_id = u32::from_be_bytes([data[val_start], data[val_start+1], data[val_start+2], data[val_start+3]]),
-            _ => {}
+impl DhcpLink for SocketLink<'_> {
+    fn carrier(&mut self) -> CarrierState {
+        // The kernel refuses to read `carrier` of an interface that is not up (EINVAL); that and a
+        // missing file both read as "cannot tell".
+        let path = format!("/sys/class/net/{}/carrier\0", self.ifname);
+        let mut buf = [0u8; 4];
+        let n = unsafe { ffi::read_file(path.as_ptr(), &mut buf) };
+        match (n, buf[0]) {
+            (n, b'1') if n >= 1 => CarrierState::Up,
+            (n, b'0') if n >= 1 => CarrierState::Down,
+            _ => CarrierState::Unknown,
         }
-        off = val_end;
     }
-    Some((msg_type, DhcpLease { ip: offered_ip, mask, gateway, dns, server_id }))
+
+    fn sleep_ms(&mut self, ms: u32) {
+        unsafe { ffi::nanosleep_ms(ms as u64) };
+        self.fallback_ms += ms as u64;
+    }
+
+    fn now_ms(&mut self) -> u64 {
+        let now = unsafe { ffi::monotonic_ms() };
+        if now != 0 { now } else { self.fallback_ms }
+    }
+
+    fn random_u32(&mut self) -> u32 {
+        let mut bytes = [0u8; 4];
+        if unsafe { ffi::getrandom_nonblock(&mut bytes) } == 4 {
+            return u32::from_le_bytes(bytes);
+        }
+        // The kernel's pool is not ready this early in boot. The value is a transaction id and a
+        // retransmit jitter, which only have to differ between guests that boot together, so the
+        // clock mixed with a counter is enough.
+        self.counter = self.counter.wrapping_add(0x9E37_79B9);
+        (self.now_ms() as u32) ^ self.counter
+    }
+
+    fn send(&mut self, packet: &[u8]) -> Result<(), i32> {
+        let sent = unsafe {
+            ffi::sendto(
+                self.sock,
+                packet.as_ptr(),
+                packet.len(),
+                0,
+                &self.broadcast_addr as *const ffi::SockaddrIn as *const u8,
+                core::mem::size_of::<ffi::SockaddrIn>() as u32,
+            )
+        };
+        if sent < 0 { Err((-sent) as i32) } else { Ok(()) }
+    }
+
+    fn receive(&mut self, buf: &mut [u8], timeout_ms: u32) -> Option<usize> {
+        let ms = timeout_ms.max(1);
+        let timeout = ffi::Timeval { tv_sec: (ms / 1000) as i64, tv_usec: ((ms % 1000) * 1000) as i64 };
+        unsafe {
+            ffi::setsockopt(
+                self.sock,
+                ffi::SOL_SOCKET,
+                ffi::SO_RCVTIMEO,
+                &timeout as *const ffi::Timeval as *const u8,
+                core::mem::size_of::<ffi::Timeval>() as u32,
+            );
+        }
+        let n = unsafe {
+            ffi::recvfrom(self.sock, buf.as_mut_ptr(), buf.len(), 0, core::ptr::null_mut(), core::ptr::null_mut())
+        };
+        if n > 0 {
+            return Some(n as usize);
+        }
+        if n != RECV_TIMED_OUT {
+            // The call failed without waiting. Pause for the time it was meant to wait, so a
+            // broken socket cannot turn the exchange into a loop that floods the network.
+            unsafe { ffi::nanosleep_ms(ms as u64) };
+        }
+        self.fallback_ms += ms as u64;
+        None
+    }
+
+    fn log(&mut self, message: &str) {
+        serial::log(message);
+    }
 }
 
 pub fn dhcp_configure(ifname: &str) {
@@ -86,10 +123,6 @@ pub fn dhcp_configure(ifname: &str) {
     unsafe {
         ffi::setsockopt(sock, ffi::SOL_SOCKET, ffi::SO_BINDTODEVICE, ifname_bytes.as_ptr(), ifname_bytes.len() as u32);
     }
-    let timeout = ffi::Timeval { tv_sec: 3, tv_usec: 0 };
-    unsafe {
-        ffi::setsockopt(sock, ffi::SOL_SOCKET, ffi::SO_RCVTIMEO, &timeout as *const ffi::Timeval as *const u8, core::mem::size_of::<ffi::Timeval>() as u32);
-    }
     let bind_addr = ffi::SockaddrIn { sin_family: ffi::AF_INET as u16, sin_port: DHCP_CLIENT_PORT.to_be(), sin_addr: ffi::INADDR_ANY.to_be(), sin_zero: [0; 8] };
     unsafe {
         if ffi::bind(sock, &bind_addr as *const ffi::SockaddrIn as *const u8, core::mem::size_of::<ffi::SockaddrIn>() as u32) < 0 {
@@ -97,31 +130,20 @@ pub fn dhcp_configure(ifname: &str) {
         }
     }
     let broadcast_addr = ffi::SockaddrIn { sin_family: ffi::AF_INET as u16, sin_port: DHCP_SERVER_PORT.to_be(), sin_addr: ffi::INADDR_BROADCAST.to_be(), sin_zero: [0; 8] };
-    let xid: u32 = 0x12345678;
-    let discover = build_dhcp_packet(DHCP_DISCOVER, xid, 0, 0);
-    unsafe {
-        ffi::sendto(sock, discover.as_ptr(), discover.len(), 0, &broadcast_addr as *const ffi::SockaddrIn as *const u8, core::mem::size_of::<ffi::SockaddrIn>() as u32);
-    }
-    let mut buf = vec![0u8; 576];
-    let n = unsafe { ffi::recvfrom(sock, buf.as_mut_ptr(), buf.len(), 0, core::ptr::null_mut(), core::ptr::null_mut()) };
-    if n <= 0 { serial::log("DHCP: no OFFER received"); unsafe { ffi::close(sock); } return; }
-    let (msg_type, lease) = match parse_dhcp_response(&buf[..n as usize]) {
-        Some(r) => r,
-        None => { serial::log("DHCP: failed to parse OFFER"); unsafe { ffi::close(sock); } return; }
-    };
-    if msg_type != DHCP_OFFER { serial::log("DHCP: expected OFFER"); unsafe { ffi::close(sock); } return; }
-    let request = build_dhcp_packet(DHCP_REQUEST, xid, lease.ip, lease.server_id);
-    unsafe {
-        ffi::sendto(sock, request.as_ptr(), request.len(), 0, &broadcast_addr as *const ffi::SockaddrIn as *const u8, core::mem::size_of::<ffi::SockaddrIn>() as u32);
-    }
-    let n = unsafe { ffi::recvfrom(sock, buf.as_mut_ptr(), buf.len(), 0, core::ptr::null_mut(), core::ptr::null_mut()) };
-    if n <= 0 { serial::log("DHCP: no ACK received"); unsafe { ffi::close(sock); } return; }
-    let (msg_type, _) = match parse_dhcp_response(&buf[..n as usize]) {
-        Some(r) => r,
-        None => { serial::log("DHCP: failed to parse ACK"); unsafe { ffi::close(sock); } return; }
-    };
-    if msg_type != DHCP_ACK { serial::log("DHCP: expected ACK"); unsafe { ffi::close(sock); } return; }
+    let mut link = SocketLink { sock, ifname, broadcast_addr, fallback_ms: 0, counter: 0 };
+    let outcome = acquire_lease(&mut link, &DhcpPolicy::default());
     unsafe { ffi::close(sock); }
+    let lease = match outcome {
+        Ok(lease) => lease,
+        Err(DhcpFailure::NoOffer { discovers, elapsed_ms }) => {
+            serial::log(&format!("DHCP: no OFFER received after {} DISCOVER(s) in {} ms", discovers, elapsed_ms));
+            return;
+        }
+        Err(DhcpFailure::NoAck { requests, elapsed_ms }) => {
+            serial::log(&format!("DHCP: no ACK received after {} REQUEST(s) in {} ms", requests, elapsed_ms));
+            return;
+        }
+    };
     configure_interface(ifname, lease.ip, lease.mask);
     add_default_route(lease.gateway);
     if lease.dns != 0 {
