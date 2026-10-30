@@ -205,6 +205,19 @@ block_mount=/dev/vdb:/data:ext4
 network=none
 ```
 
+#### DHCP timing
+
+With `network=dhcp` the init waits for the link before it sends, and sends again when no reply comes (RFC 2131 section 4.1). The timing is fixed in the guest, no key sets it, and lives in `DhcpPolicy::default()` in `main/features/init/src/api/dhcp.rs`:
+
+| Setting | Value | Reason |
+|---|---|---|
+| Wait for the link | up to 2 s, looking every 5 ms | The virtio-net driver turns the carrier on from a workqueue after the interface is up. A frame sent before that is dropped by the guest kernel and `sendto` still succeeds, so the first DISCOVER was lost with nothing logged (vmruntime#553). Measured with kernel 7.3: 0 ms in 439 of 440 guests and 1 ms in one, so 2 s is far above anything seen. A guest whose NIC never gets a link spends the 2 s once at boot. |
+| First wait for a reply | 1 s, doubled after each send, at most 8 s | The earlier client waited 3 s once; a lost first message now costs about 1 s. RFC 2131 starts at 4 s, which suits a network and not the host-local NAT of a microVM that boots in 2 to 3 s. |
+| Randomization | plus or minus 1/8 of each wait | RFC 2131 asks for it, so guests that start together do not send again together. |
+| Overall limit | 15 s after the first DISCOVER | A guest with a NIC and no DHCP server gave up after 3 s and now gives up after 15 s; it then boots on without an address, as before. |
+
+A NAK starts the exchange over with a new transaction id, at most three times. The console says when the link was waited for, when a message is sent again, and why no lease was obtained (`DHCP: no OFFER received after N DISCOVER(s) in M ms`, or `no ACK`). A normal boot writes nothing beyond `DHCP: configured`.
+
 ---
 
 ### `dns`

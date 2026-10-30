@@ -13,3 +13,11 @@ pub use crate::api::marker::{
     MARKER_SECTION,
 };
 pub use crate::spi::marker::{encode_marker, format_banner, format_own_banner, marker_len, read_marker};
+pub use crate::api::dhcp::{
+    CarrierState, CarrierWait, DhcpFailure, DhcpLease, DhcpLink, DhcpPolicy, DhcpReply, DHCP_ACK,
+    DHCP_BOOTREQUEST, DHCP_DISCOVER, DHCP_MAX_REPLY, DHCP_NAK, DHCP_OFFER, DHCP_REQUEST,
+};
+pub use crate::spi::dhcp::{
+    acquire_lease, build_dhcp_packet, compute_retransmit_timeout_ms, parse_dhcp_response,
+    wait_for_carrier,
+};

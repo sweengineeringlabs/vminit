@@ -1,6 +1,6 @@
 [package]
 name = "swe_vminit_bin"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2021"
 description = "vminit PID 1 init binary for Linux x86_64 microVMs"
 
