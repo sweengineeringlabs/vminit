@@ -484,7 +484,18 @@ fn builtin_date(_args: &[String]) -> i32 {
 }
 
 fn builtin_sleep(args: &[String]) -> i32 {
-    let secs: f64 = args.first().and_then(|s| s.parse().ok()).unwrap_or(1.0);
-    std::thread::sleep(std::time::Duration::from_secs_f64(secs));
-    0
+    let arg = args.first().map(String::as_str).unwrap_or("1");
+    // a duration is a finite, non-negative number that fits in a `Duration`: `-1`, `nan`, `inf` and `1e30` parse as numbers
+    // but are not one, and `from_secs_f64` panics on them
+    let duration = arg.parse::<f64>().ok().and_then(|secs| std::time::Duration::try_from_secs_f64(secs).ok());
+    match duration {
+        Some(duration) => {
+            std::thread::sleep(duration);
+            0
+        }
+        None => {
+            shio::write_bytes(format!("sleep: invalid time interval '{}'\n", arg).as_bytes());
+            1
+        }
+    }
 }
