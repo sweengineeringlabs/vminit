@@ -28,28 +28,28 @@ These are checks against my reading of the documented formats. If one fails, the
 
 ## Run
 
-Needs `cargo-fuzz`, the dated nightly `nightly-2026-10-02` (the one pinned for vmruntime's eBPF build; vminit has no toolchain pin of its own), and a C++ compiler: the build compiled libFuzzer with g++ 15 and needed no override. Linux and WSL only. These are the commands that were run on 2026-10-31 (WSL Ubuntu), with `cargo-fuzz` 0.13.2, `libfuzzer-sys` 0.4.13 and `arbitrary` 1.5.0 (`fuzz/Cargo.lock`):
+Needs `cargo-fuzz`, the dated nightly `nightly-2026-10-02` (the one pinned for vmruntime's eBPF build; vminit has no toolchain pin of its own), and a C++ compiler: the build compiled libFuzzer with g++ 15 and needed no override. Linux and WSL only. These are the commands that were run on 2026-10-31 (WSL Ubuntu), with `cargo-fuzz` 0.13.2, `libfuzzer-sys` 0.4.13 and `arbitrary` 1.5.0 (`Cargo.lock` in this folder):
 
 ```bash
 cargo install cargo-fuzz --locked              # once (19 min on a busy host)
 rustup toolchain install nightly-2026-10-02    # once, if the nightly is not there
 
-cd fuzz
+cd main/features/vminit_fuzz     # from the repository root; the targets are the package in bin/
 # build into a directory on the WSL file system: a checkout under /mnt/c is slow to build in (first build 22 min on a busy host)
-cargo +nightly-2026-10-02 fuzz build --target-dir "$HOME/vminit-fuzz-target"
+cargo +nightly-2026-10-02 fuzz build --fuzz-dir bin --target-dir "$HOME/vminit-fuzz-target"
 
 # run against a COPY of the seeds: libFuzzer adds the inputs it finds to the corpus directory it is given
-mkdir -p "$HOME/fuzz-work" && cp -r corpus/read_marker "$HOME/fuzz-work/read_marker"
-cargo +nightly-2026-10-02 fuzz run read_marker "$HOME/fuzz-work/read_marker" \
+mkdir -p "$HOME/fuzz-work" && cp -r bin/corpus/read_marker "$HOME/fuzz-work/read_marker"
+cargo +nightly-2026-10-02 fuzz run --fuzz-dir bin read_marker "$HOME/fuzz-work/read_marker" \
     --target-dir "$HOME/vminit-fuzz-target" -- -max_total_time=3600
 ```
 
-Targets: `read_marker`, `parse_dhcp_response`, `parse_config`, `parse_overlay_manifest`. A crash is reported as `deadly signal` with the panic message above it, and the input is written to `fuzz/artifacts/<target>/crash-<hash>`.
+Targets: `read_marker`, `parse_dhcp_response`, `parse_config`, `parse_overlay_manifest`. A crash is reported as `deadly signal` with the panic message above it, and the input is written to `bin/artifacts/<target>/crash-<hash>`.
 
 To check that a target can fail, edit the parser to remove a check (for example, change `file.get(offset..end).ok_or(...)` in `read_marker` to `&file[offset..end]`), rebuild and run it: the fuzzer should find it within seconds; then restore the file with `git checkout` (or from a copy, if the checkout has CRLF line endings).
 
-Crashes are written to `fuzz/artifacts/<target>/` (not committed). A crash is minimized with `cargo fuzz tmin`, fixed in `swe_vminit_init`, and kept as a regression test in `main/features/init/tests/` that fails without the fix.
+Crashes are written to `bin/artifacts/<target>/` (not committed). A crash is minimized with `cargo fuzz tmin`, fixed in `swe_vminit_init`, and kept as a regression test in `main/features/init/tests/` that fails without the fix.
 
 ## Seeds
 
-`corpus/<target>/` holds a few hundred bytes of seed per target, written from the documented formats (`docs/xkvm_conf.md`, the parser doc comments and the layout the marker tests build). **They are synthesized, not captured**: a real captured DHCP exchange and a real `vmfs` file are a later task. Small seed corpora are committed; larger ones are not.
+`bin/corpus/<target>/` holds a few hundred bytes of seed per target, written from the documented formats (`docs/xkvm_conf.md`, the parser doc comments and the layout the marker tests build). **They are synthesized, not captured**: a real captured DHCP exchange and a real `vmfs` file are a later task. Small seed corpora are committed; larger ones are not.

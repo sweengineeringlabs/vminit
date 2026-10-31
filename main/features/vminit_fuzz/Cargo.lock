@@ -86,7 +86,7 @@ name = "swe_vminit_init"
 version = "0.1.0"
 
 [[package]]
-name = "vminit_fuzz"
+name = "vminit_fuzz_bin"
 version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
