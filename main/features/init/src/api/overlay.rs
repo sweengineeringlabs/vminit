@@ -31,6 +31,9 @@ pub struct OverlayManifest {
 pub enum ParseError {
     MalformedLine { line_number: usize, content: String },
     NonAbsolutePath { line_number: usize, path: String },
+    /// An absolute dest that is not a normalised path (a `.`, `..` or empty segment, a trailing `/`, or a NUL): the applier
+    /// writes to `{rootfs}{dest}`, so such a dest could leave the rootfs.
+    UnsafePath { line_number: usize, path: String },
     InvalidMode { line_number: usize, raw: String },
     InvalidUidGid { line_number: usize, field: &'static str, raw: String },
 }
@@ -42,6 +45,8 @@ impl core::fmt::Display for ParseError {
                 write!(f, "manifest line {line_number}: malformed entry (expected `<dest>:<mode>:<uid>:<gid>`): {content:?}"),
             ParseError::NonAbsolutePath { line_number, path } =>
                 write!(f, "manifest line {line_number}: dest path must be absolute (start with `/`): {path:?}"),
+            ParseError::UnsafePath { line_number, path } =>
+                write!(f, "manifest line {line_number}: dest path must be a normalised absolute path with no `.`, `..` or empty segment and no NUL: {path:?}"),
             ParseError::InvalidMode { line_number, raw } =>
                 write!(f, "manifest line {line_number}: invalid octal mode: {raw:?}"),
             ParseError::InvalidUidGid { line_number, field, raw } =>
@@ -85,6 +90,14 @@ impl OverlayManifest {
 
         if !dest.starts_with('/') {
             return Err(ParseError::NonAbsolutePath {
+                line_number,
+                path: dest.to_owned(),
+            });
+        }
+
+        // `{rootfs}{dest}` is where the file is written: every segment after the leading `/` must be a real name
+        if dest.contains('\0') || dest.split('/').skip(1).any(|segment| matches!(segment, "" | "." | "..")) {
+            return Err(ParseError::UnsafePath {
                 line_number,
                 path: dest.to_owned(),
             });
