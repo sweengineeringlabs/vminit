@@ -53,3 +53,18 @@ Crashes are written to `bin/artifacts/<target>/` (not committed). A crash is min
 ## Seeds
 
 `bin/corpus/<target>/` holds a few hundred bytes of seed per target, written from the documented formats (`docs/xkvm_conf.md`, the parser doc comments and the layout the marker tests build). **They are synthesized, not captured**: a real captured DHCP exchange and a real `vmfs` file are a later task. Small seed corpora are committed; larger ones are not.
+
+## Check the targets before trusting them
+
+A target that passes proves little until it has been shown to fail. `scripts/fuzz/planted_bugs.json` lists the bugs planted so far in the
+extraction code (the entry name joined without `safe_path_join`, a symlink extracted, a file truncated, a directory not created); the tool
+that plants them one at a time, rebuilds, and runs each model target and its control is in the vmruntime repository,
+`scm/scripts/fuzz/plant_bug.py` (see its README):
+
+```bash
+python3 <vmruntime>/scm/scripts/fuzz/plant_bug.py --spec scripts/fuzz/planted_bugs.json --check-only   # the texts still match; builds nothing
+python3 <vmruntime>/scm/scripts/fuzz/plant_bug.py --spec scripts/fuzz/planted_bugs.json --seconds 60    # plant, build, run
+```
+
+Result of 2026-10-31: 4 of 4 found by `pkg_extract_model`, none by `pkg_extract_survive` (vminit#18). The generator of that target carries a unit test
+that counts how often a generated run reaches a case the model checks, because an earlier generator reached it in 0.8% of runs and missed a planted bug.

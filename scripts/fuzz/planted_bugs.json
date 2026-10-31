@@ -1,0 +1,67 @@
+{
+  "repo": "../..",
+  "fuzz_dir": "main/features/vminit_fuzz",
+  "toolchain": "nightly-2026-10-02",
+  "bugs": [
+    {
+      "id": "X1",
+      "file": "main/features/pkg/src/core/initrd.rs",
+      "description": "the entry name is joined without safe_path_join",
+      "model": "pkg_extract_model",
+      "controls": [
+        "pkg_extract_survive"
+      ],
+      "edits": [
+        {
+          "old": "swe_justpkg_pkg::safe_path_join(dest_dir, &raw_path).map_err(|e| {",
+          "new": "Ok::<_, swe_justpkg_pkg::PkgError>(dest_dir.join(&raw_path)).map_err(|e| {"
+        }
+      ]
+    },
+    {
+      "id": "X2",
+      "file": "main/features/pkg/src/core/initrd.rs",
+      "description": "a symlink entry is extracted as a file",
+      "model": "pkg_extract_model",
+      "controls": [
+        "pkg_extract_survive"
+      ],
+      "edits": [
+        {
+          "old": "} else if entry_type.is_file() {",
+          "new": "} else if entry_type.is_file() || entry_type.is_symlink() {"
+        }
+      ]
+    },
+    {
+      "id": "X3",
+      "file": "main/features/pkg/src/core/initrd.rs",
+      "description": "a file is extracted truncated to 10 bytes",
+      "model": "pkg_extract_model",
+      "controls": [
+        "pkg_extract_survive"
+      ],
+      "edits": [
+        {
+          "old": "std::io::copy(&mut entry, &mut out)",
+          "new": "std::io::copy(&mut std::io::Read::take(&mut entry, 10), &mut out)"
+        }
+      ]
+    },
+    {
+      "id": "X4",
+      "file": "main/features/pkg/src/core/initrd.rs",
+      "description": "a directory entry creates nothing",
+      "model": "pkg_extract_model",
+      "controls": [
+        "pkg_extract_survive"
+      ],
+      "edits": [
+        {
+          "old": "if entry_type.is_dir() {",
+          "new": "if false && entry_type.is_dir() {"
+        }
+      ]
+    }
+  ]
+}
