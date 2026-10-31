@@ -6,7 +6,9 @@ use swe_vminit_init::OverlayManifest;
 // Checks the VALUES `OverlayManifest::parse` returns. The fuzzer's bytes choose a list of entries (destination, mode,
 // uid, gid); the manifest is written here in the documented `dest:mode:uid:gid` form (mode in octal, with or without
 // the `0o` prefix, ids in decimal), with comment lines, blank lines and leading spaces between them. It must parse to
-// exactly those entries in that order. With one malformed line added it must be rejected: the parse is strict.
+// exactly those entries in that order. With one malformed line added it must be rejected: the parse is strict. A destination
+// that is not a normalised absolute path (a `.`, `..` or empty segment, or a trailing `/`; vminit#14: the file is written to
+// `{rootfs}{dest}`) must be rejected on its own, whatever the rest of the line says.
 
 const PATH_CHARS: &[char] = &['a', 'b', 'z', 'A', '0', '9', '.', '_', '-', '/', 'é'];
 
@@ -14,6 +16,11 @@ fn path(u: &mut Unstructured) -> String {
     let len = u.int_in_range(0..=24usize).unwrap_or(0);
     let tail: String = (0..len).map(|_| *u.choose(PATH_CHARS).unwrap_or(&'a')).collect();
     format!("/{tail}")
+}
+
+/// The rule of vminit#14, written here independently of the parser: after the leading `/` every segment is a real name.
+fn is_safe(dest: &str) -> bool {
+    dest.len() > 1 && dest.starts_with('/') && dest[1..].split('/').all(|segment| !segment.is_empty() && segment != "." && segment != "..")
 }
 
 fuzz_target!(|bytes: &[u8]| {
@@ -27,6 +34,11 @@ fuzz_target!(|bytes: &[u8]| {
             1 => text.push_str("   \n"),
             _ => {
                 let dest = path(&mut u);
+                if !is_safe(&dest) {
+                    let line = format!("{dest}:0644:0:0\n");
+                    assert!(OverlayManifest::parse(&line).is_err(), "an unsafe dest was accepted: {dest:?}");
+                    continue;
+                }
                 let mode: u32 = u.arbitrary().unwrap_or(0);
                 let uid: u32 = u.arbitrary().unwrap_or(0);
                 let gid: u32 = u.arbitrary().unwrap_or(0);
