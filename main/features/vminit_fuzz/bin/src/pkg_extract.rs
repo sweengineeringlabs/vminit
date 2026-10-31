@@ -16,11 +16,11 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use swe_vminit_pkg::run_install_step;
 
-/// Entry names, hostile ones included. None normalises to an empty path.
-const NAMES: &[&str] = &[
-    "a", "b", "dir/c", "dir/sub/d", "./e", "f//g", "a/./b2", "...", "....", "x.y", "dir2/", "..", "../escaped", "a/../../escaped",
-    "dir/../../escaped", "dir/../x", "/abs", "/abs/file", "C:", "x/C:/y", "ab/..", "../../deep",
-];
+/// Entry names the rule accepts. None normalises to an empty path and none is a directory prefix of another.
+const SAFE_NAMES: &[&str] = &["a", "b", "dir/c", "dir/sub/d", "./e", "f//g", "g/./h", "...", "....", "x.y", "dir2/i"];
+
+/// Entry names the rule refuses.
+const HOSTILE_NAMES: &[&str] = &["..", "../escaped", "a/../../escaped", "dir/../../escaped", "dir/../x", "/abs", "/abs/file", "C:", "x/C:/y", "ab/..", "../../deep"];
 
 enum Kind {
     File(Vec<u8>),
@@ -153,19 +153,40 @@ impl Drop for Fixture {
     }
 }
 
+/// Up to eight entries with safe names, and now and then one entry with a hostile name at a random position (a run that begins
+/// with a refused entry extracts nothing, and nothing after the first refused entry is extracted, so more hostile entries would
+/// leave most runs with nothing to check).
 fn build_entries(u: &mut Unstructured) -> Vec<Entry> {
-    (0..u.int_in_range(0..=8usize).unwrap_or(3))
-        .map(|_| {
-            let name = NAMES[u.int_in_range(0..=NAMES.len() - 1).unwrap_or(0)].to_string();
-            let kind = match u.int_in_range(0..=5).unwrap_or(0) {
-                0 | 1 | 2 => Kind::File((0..u.int_in_range(0..=300usize).unwrap_or(5)).map(|_| u.arbitrary().unwrap_or(0u8)).collect()),
-                3 => Kind::Dir,
-                4 => Kind::Symlink,
-                _ => Kind::Hardlink,
-            };
-            Entry { name, kind }
-        })
-        .collect()
+    let count = u.int_in_range(0..=8usize).unwrap_or(3);
+    let hostile_at = if u.ratio(1, 4).unwrap_or(false) { Some(u.int_in_range(0..=count).unwrap_or(0)) } else { None };
+    let mut entries = Vec::new();
+    for index in 0..=count {
+        let hostile = hostile_at == Some(index);
+        if (index == count && !hostile) || u.is_empty() {
+            break;
+        }
+        let name = if hostile {
+            HOSTILE_NAMES[u.int_in_range(0..=HOSTILE_NAMES.len() - 1).unwrap_or(0)]
+        } else {
+            SAFE_NAMES[u.int_in_range(0..=SAFE_NAMES.len() - 1).unwrap_or(0)]
+        }
+        .to_string();
+        let kind = match u.int_in_range(0..=5).unwrap_or(0) {
+            0..=2 => {
+                // sizes at and around the limits a copy loop could get wrong, not whatever the input happens to leave
+                let len = *u.choose(&[0usize, 1, 9, 10, 11, 64, 300]).unwrap_or(&11);
+                // the content comes from one seed byte: content bytes taken from the input would use it up, and the entries that
+                // follow would then be copies of the first name with no content, overwriting the file the model checks
+                let seed: u8 = u.arbitrary().unwrap_or(0xA5);
+                Kind::File((0..len).map(|i| seed.wrapping_add(i as u8)).collect())
+            }
+            3 => Kind::Dir,
+            4 => Kind::Symlink,
+            _ => Kind::Hardlink,
+        };
+        entries.push(Entry { name, kind });
+    }
+    entries
 }
 
 /// What the destination must hold after extracting `entries`, or `None` when the outcome is not fixed by the rule (one entry's
@@ -256,4 +277,40 @@ fn describe(entries: &[Entry]) -> String {
         })
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// How many of 20,000 pseudo-random inputs of 21 bytes (the limit libFuzzer had reached after a minute) give a run in which
+    /// the model checks the contents of a file longer than 10 bytes: the only kind of run that can see a truncated copy.
+    #[test]
+    fn test_generated_runs_with_a_checked_file_over_ten_bytes_are_not_rare() {
+        let mut state: u64 = 0x9E3779B97F4A7C15;
+        let mut checked = 0usize;
+        for _ in 0..20_000 {
+            let bytes: Vec<u8> = (0..21)
+                .map(|_| {
+                    state ^= state << 13;
+                    state ^= state >> 7;
+                    state ^= state << 17;
+                    (state >> 24) as u8
+                })
+                .collect();
+            let mut u = Unstructured::new(&bytes);
+            let entries = build_entries(&mut u);
+            let damaged = u.ratio(1, 8).unwrap_or(false);
+            if damaged {
+                continue;
+            }
+            if let Some(tree) = expected_tree(&entries) {
+                if tree.values().any(|v| v.as_ref().is_some_and(|content| content.len() > 10)) {
+                    checked += 1;
+                }
+            }
+        }
+        eprintln!("runs that check a file over 10 bytes: {checked} of 20000");
+        assert!(checked > 2000, "only {checked} of 20000 runs check a file over 10 bytes");
+    }
 }
