@@ -55,3 +55,23 @@ fn test_dispatch_grep_missing_pattern_returns_two() {
     let (_, code) = capture(|| builtins::dispatch(&args(&["grep"])).unwrap());
     assert_eq!(code, 2, "grep with no pattern must return exit code 2");
 }
+
+// -- sleep with an argument no duration can be made from (vminit#15) --
+
+#[test]
+fn test_dispatch_sleep_invalid_duration_returns_one_with_error_message_and_does_not_panic() {
+    for bad in ["-1", "-0.5", "nan", "inf", "1e30", "abc"] {
+        let (out, code) = capture(|| builtins::dispatch(&args(&["sleep", bad])).unwrap());
+        assert_eq!(code, 1, "sleep {bad} must fail with exit code 1");
+        assert!(out.contains("sleep:"), "sleep {bad} must say why on its output, got {out:?}");
+    }
+}
+
+#[test]
+fn test_dispatch_sleep_zero_and_a_short_fraction_succeed() {
+    for good in ["0", "0.01"] {
+        let (out, code) = capture(|| builtins::dispatch(&args(&["sleep", good])).unwrap());
+        assert_eq!(code, 0, "sleep {good} must succeed");
+        assert!(out.is_empty(), "sleep {good} must print nothing, got {out:?}");
+    }
+}
