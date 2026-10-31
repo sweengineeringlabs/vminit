@@ -90,3 +90,60 @@ fn test_overlay_parse_path_traversal_attempt_is_rejected_as_relative() {
         other => panic!("expected NonAbsolutePath, got {other:?}"),
     }
 }
+
+// -- Absolute dests that still leave the rootfs (vminit#14) --
+//
+// `apply_one_overlay_entry` writes to `{rootfs}{dest}`, so a dest with a `..` segment lands outside the rootfs even though it
+// starts with `/`.
+
+#[test]
+fn test_overlay_parse_dest_with_a_parent_segment_is_rejected() {
+    for dest in [
+        "/../etc/vminit.conf",
+        "/a/../../etc/vminit.conf",
+        "/etc/..",
+        "/a/../b",
+    ] {
+        let line = format!("{dest}:4755:0:0\n");
+        assert!(
+            OverlayManifest::parse(&line).is_err(),
+            "dest {dest:?} must be rejected"
+        );
+    }
+}
+
+#[test]
+fn test_overlay_parse_dest_that_is_not_a_normalised_path_is_rejected() {
+    for dest in ["/", "/a//b", "/a/./b", "/a/", "/a/b/.", "/etc/nul\0byte"] {
+        let line = format!("{dest}:644:0:0\n");
+        assert!(
+            OverlayManifest::parse(&line).is_err(),
+            "dest {dest:?} must be rejected"
+        );
+    }
+}
+
+#[test]
+fn test_overlay_parse_dest_with_dots_inside_a_name_is_accepted() {
+    for dest in ["/etc/app.conf", "/a/b/c", "/a..b", "/.hidden", "/dir/..data"] {
+        let line = format!("{dest}:644:0:0\n");
+        let manifest = OverlayManifest::parse(&line)
+            .unwrap_or_else(|e| panic!("dest {dest:?} must be accepted: {e}"));
+        assert_eq!(manifest.entries.len(), 1);
+        assert_eq!(manifest.entries[0].dest, dest);
+    }
+}
+
+#[test]
+fn test_overlay_parse_unsafe_dest_error_names_the_line_and_the_path() {
+    let text = "/ok:644:0:0\n/etc/../../x:644:0:0\n";
+    match OverlayManifest::parse(text).unwrap_err() {
+        ParseError::UnsafePath { line_number, path } => {
+            assert_eq!(line_number, 2);
+            assert_eq!(path, "/etc/../../x");
+        }
+        other => panic!("expected UnsafePath, got {other:?}"),
+    }
+    let message = OverlayManifest::parse("/a/../b:644:0:0\n").unwrap_err().to_string();
+    assert!(message.contains("line 1") && message.contains("/a/../b"), "{message}");
+}
