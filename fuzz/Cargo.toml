@@ -43,3 +43,32 @@ path = "fuzz_targets/parse_overlay_manifest.rs"
 test = false
 doc = false
 bench = false
+
+# targets that check the values returned (structure-aware: the input is built from fields and the result is compared)
+[[bin]]
+name = "read_marker_model"
+path = "fuzz_targets/read_marker_model.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_dhcp_model"
+path = "fuzz_targets/parse_dhcp_model.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_overlay_model"
+path = "fuzz_targets/parse_overlay_model.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_config_model"
+path = "fuzz_targets/parse_config_model.rs"
+test = false
+doc = false
+bench = false
