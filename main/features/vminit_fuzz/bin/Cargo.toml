@@ -8,9 +8,15 @@ description = "cargo-fuzz targets for the init's parsers of guest-controlled byt
 [package.metadata]
 cargo-fuzz = true
 
+[lib]
+name = "vminit_fuzz_bin"
+path = "src/lib.rs"
+
 [dependencies]
 libfuzzer-sys = "0.4"
 swe_vminit_init = { path = "../../init" }
+swe_vminit_pkg = { path = "../../pkg" }
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 
 
 [[bin]]
@@ -66,6 +72,20 @@ bench = false
 [[bin]]
 name = "parse_config_model"
 path = "src/parse_config_model.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pkg_extract_model"
+path = "src/pkg_extract_model.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pkg_extract_survive"
+path = "src/pkg_extract_survive.rs"
 test = false
 doc = false
 bench = false
