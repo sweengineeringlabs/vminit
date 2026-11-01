@@ -168,20 +168,21 @@ fn log_carrier_wait<L: DhcpLink>(link: &mut L, policy: &DhcpPolicy) {
     }
 }
 
-/// Send `packet` and wait for a reply to `xid` of one of the `accept`ed types, sending it again
-/// with a growing wait until `overall_limit_ms` (counted from `start`) has passed. A reply that
-/// is malformed, answers another transaction or has another type is ignored. `sent` counts
-/// the sends.
-fn await_reply<L: DhcpLink>(
-    link: &mut L,
-    policy: &DhcpPolicy,
-    start: u64,
-    packet: &[u8],
+/// One message of the exchange: what is sent, the transaction it belongs to, the reply types that
+/// answer it, and its name for the log.
+struct Message<'a> {
+    packet: &'a [u8],
     xid: u32,
-    accept: &[u8],
-    name: &str,
-    sent: &mut u32,
-) -> Option<DhcpReply> {
+    accept: &'a [u8],
+    name: &'a str,
+}
+
+/// Send `message.packet` and wait for a reply to `message.xid` of one of the types it accepts,
+/// sending it again with a growing wait until `overall_limit_ms` (counted from `start`) has
+/// passed. A reply that is malformed, answers another transaction, has another type or grants no
+/// address is ignored. `sent` counts the sends.
+fn await_reply<L: DhcpLink>(link: &mut L, policy: &DhcpPolicy, start: u64, message: &Message, sent: &mut u32) -> Option<DhcpReply> {
+    let Message { packet, xid, accept, name } = *message;
     let mut buf = [0u8; DHCP_MAX_REPLY];
     let mut attempt = 0u32;
     loop {
@@ -211,7 +212,11 @@ fn await_reply<L: DhcpLink>(
                 None => break,
                 Some(n) => {
                     if let Some(reply) = parse_dhcp_response(&buf[..n.min(buf.len())]) {
-                        if reply.transaction_id == xid && accept.contains(&reply.message_type) {
+                        // An OFFER and an ACK grant an address (RFC 2131 4.3.1: the server fills in yiaddr). One that grants
+                        // 0.0.0.0 is malformed and is ignored like a reply of another type, not applied (vminit#22). A NAK
+                        // grants nothing by design.
+                        let grants_an_address = reply.message_type == DHCP_NAK || reply.lease.ip != 0;
+                        if reply.transaction_id == xid && accept.contains(&reply.message_type) && grants_an_address {
                             return Some(reply);
                         }
                     }
@@ -234,12 +239,14 @@ pub fn acquire_lease<L: DhcpLink>(link: &mut L, policy: &DhcpPolicy) -> Result<D
     loop {
         let xid = link.random_u32();
         let discover = build_dhcp_packet(DHCP_DISCOVER, xid, 0, 0);
-        let offer = match await_reply(link, policy, start, &discover, xid, &[DHCP_OFFER], "DISCOVER", &mut discovers) {
+        let discover = Message { packet: &discover, xid, accept: &[DHCP_OFFER], name: "DISCOVER" };
+        let offer = match await_reply(link, policy, start, &discover, &mut discovers) {
             Some(offer) => offer,
             None => return Err(DhcpFailure::NoOffer { discovers, elapsed_ms: elapsed_ms(link, start) }),
         };
         let request = build_dhcp_packet(DHCP_REQUEST, xid, offer.lease.ip, offer.lease.server_id);
-        match await_reply(link, policy, start, &request, xid, &[DHCP_ACK, DHCP_NAK], "REQUEST", &mut requests) {
+        let request = Message { packet: &request, xid, accept: &[DHCP_ACK, DHCP_NAK], name: "REQUEST" };
+        match await_reply(link, policy, start, &request, &mut requests) {
             Some(reply) if reply.message_type == DHCP_ACK => return Ok(reply.lease),
             Some(_) => {
                 refusals += 1;
