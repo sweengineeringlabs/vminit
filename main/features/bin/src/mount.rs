@@ -9,6 +9,10 @@ use swe_vminit_init::{BlockMount, OverlayEntry, OverlayManifest, VolumeSpec};
 
 const OVERLAY_MANIFEST_PATH: &[u8] = b"/overlay/.manifest\0";
 const OVERLAY_PREFIX: &str = "/overlay";
+/// The largest manifest the init reads. A manifest is one short line per file; a larger one is refused, not cut.
+const MAX_MANIFEST_BYTES: usize = 65536;
+/// How much of an overlay file is copied at a time.
+const OVERLAY_COPY_CHUNK_BYTES: usize = 64 * 1024;
 const ROOTFS_SENTINEL: &[u8] = b"/rootfs/.xkvm-rootfs-mounted\0";
 
 fn mkdir_p(path: &[u8]) {
@@ -184,10 +188,15 @@ fn parse_su_exec_uid_gid(entrypoint: &[String]) -> Option<(u32, u32)> {
 pub fn apply_overlay(rootfs: &str) {
     if !unsafe { ffi::path_exists(OVERLAY_MANIFEST_PATH.as_ptr()) } { return; }
 
-    let mut manifest_buf = vec![0u8; 65536];
+    // one byte more than the limit, to tell a manifest that is too large from one that just fits
+    let mut manifest_buf = vec![0u8; MAX_MANIFEST_BYTES + 1];
     let n = unsafe { ffi::read_file(OVERLAY_MANIFEST_PATH.as_ptr(), &mut manifest_buf) };
     if n < 0 {
         serial::log("overlay: failed to read manifest — skipping");
+        return;
+    }
+    if n as usize > MAX_MANIFEST_BYTES {
+        serial::log(&format!("overlay: manifest is larger than {MAX_MANIFEST_BYTES} bytes — skipping (it would be cut and parse as a different manifest)"));
         return;
     }
     let manifest_text = match String::from_utf8(manifest_buf[..n as usize].to_vec()) {
@@ -219,18 +228,13 @@ fn apply_one_overlay_entry(rootfs: &str, entry: &OverlayEntry) -> Result<(), Str
     let target_path = format!("{rootfs}{}", entry.dest);
     let target_path_c = format!("{}\0", target_path);
 
-    // Read source file
-    let mut payload = vec![0u8; 16 * 1024 * 1024]; // 16 MB max overlay file
-    let n = unsafe { ffi::read_file(source_path.as_ptr(), &mut payload) };
-    if n < 0 { return Err(format!("read {source_path}: syscall failed")); }
-    payload.truncate(n as usize);
-
     // Ensure parent directory exists
     if let Some(parent) = parent_dir_for(&target_path) { mkdir_p_chain(parent); }
 
-    // Write target file
-    if !unsafe { ffi::write_file(target_path_c.as_ptr(), &payload) } {
-        return Err(format!("write {target_path}: syscall failed"));
+    // Copy the file in chunks: the heap of this build is 4 MiB, a file can be larger, and a fixed buffer used to cut it silently
+    let mut chunk = vec![0u8; OVERLAY_COPY_CHUNK_BYTES];
+    if unsafe { ffi::copy_file(source_path.as_ptr(), target_path_c.as_ptr(), &mut chunk) }.is_none() {
+        return Err(format!("copy {source_path} to {target_path}: syscall failed"));
     }
 
     let perm_bits = entry.mode & 0o7777;
