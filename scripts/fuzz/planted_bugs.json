@@ -62,6 +62,171 @@
           "new": "if false && entry_type.is_dir() {"
         }
       ]
+    },
+    {
+      "id": "J1",
+      "file": "main/features/init/src/spi/dhcp.rs",
+      "description": "a reply to another transaction is taken (the transaction id is not compared)",
+      "model": "dhcp_exchange_model",
+      "controls": [
+        "dhcp_exchange_survive"
+      ],
+      "edits": [
+        {
+          "old": "if reply.transaction_id == xid && accept.contains(&reply.message_type) && grants_an_address {",
+          "new": "if accept.contains(&reply.message_type) && grants_an_address {"
+        }
+      ]
+    },
+    {
+      "id": "J2",
+      "file": "main/features/init/src/spi/dhcp.rs",
+      "description": "a reply of any message type is taken",
+      "model": "dhcp_exchange_model",
+      "controls": [
+        "dhcp_exchange_survive"
+      ],
+      "edits": [
+        {
+          "old": "if reply.transaction_id == xid && accept.contains(&reply.message_type) && grants_an_address {",
+          "new": "if reply.transaction_id == xid && grants_an_address {"
+        }
+      ]
+    },
+    {
+      "id": "J3",
+      "file": "main/features/init/src/spi/dhcp.rs",
+      "description": "the REQUEST asks for the router's address instead of the address offered",
+      "model": "dhcp_exchange_model",
+      "controls": [
+        "dhcp_exchange_survive"
+      ],
+      "edits": [
+        {
+          "old": "let request = build_dhcp_packet(DHCP_REQUEST, xid, offer.lease.ip, offer.lease.server_id);",
+          "new": "let request = build_dhcp_packet(DHCP_REQUEST, xid, offer.lease.gateway, offer.lease.server_id);"
+        }
+      ]
+    },
+    {
+      "id": "J4",
+      "file": "main/features/init/src/spi/dhcp.rs",
+      "description": "the wait before a retransmission does not grow",
+      "model": "dhcp_exchange_model",
+      "controls": [
+        "dhcp_exchange_survive"
+      ],
+      "edits": [
+        {
+          "old": "let doubled = (policy.first_timeout_ms as u64) << attempt.min(16);",
+          "new": "let doubled = (policy.first_timeout_ms as u64) << 0;"
+        }
+      ]
+    },
+    {
+      "id": "J5",
+      "file": "main/features/init/src/spi/dhcp.rs",
+      "description": "a server that refuses every time is asked a thousand times, not four",
+      "model": "dhcp_exchange_model",
+      "controls": [
+        "dhcp_exchange_survive"
+      ],
+      "edits": [
+        {
+          "old": "if refusals > MAX_NAK_RESTARTS || elapsed_ms(link, start) >= policy.overall_limit_ms {",
+          "new": "if refusals > 1000 || elapsed_ms(link, start) >= policy.overall_limit_ms {"
+        }
+      ]
+    },
+    {
+      "id": "J6",
+      "file": "main/features/init/src/spi/dhcp.rs",
+      "description": "the lease returned is the one of the OFFER, not of the ACK",
+      "model": "dhcp_exchange_model",
+      "controls": [
+        "dhcp_exchange_survive"
+      ],
+      "edits": [
+        {
+          "old": "Some(reply) if reply.message_type == DHCP_ACK => return Ok(reply.lease),",
+          "new": "Some(reply) if reply.message_type == DHCP_ACK => return Ok(offer.lease),"
+        }
+      ]
+    },
+    {
+      "id": "J7",
+      "file": "main/features/init/src/spi/dhcp.rs",
+      "description": "the exchange sends once more at the overall limit (the limit is tested with > instead of >=)",
+      "model": "dhcp_exchange_model",
+      "controls": [
+        "dhcp_exchange_survive"
+      ],
+      "edits": [
+        {
+          "old": "if elapsed >= policy.overall_limit_ms {",
+          "new": "if elapsed > policy.overall_limit_ms {"
+        }
+      ]
+    },
+    {
+      "id": "J8",
+      "file": "main/features/init/src/spi/dhcp.rs",
+      "description": "the jitter only adds to the wait, never subtracts",
+      "model": "dhcp_exchange_model",
+      "controls": [
+        "dhcp_exchange_survive"
+      ],
+      "edits": [
+        {
+          "old": "(base - span + (random as u64) % (2 * span + 1)) as u32",
+          "new": "(base + span + (random as u64) % (2 * span + 1)) as u32"
+        }
+      ]
+    },
+    {
+      "id": "J9",
+      "file": "main/features/init/src/spi/dhcp.rs",
+      "description": "a reply that grants the address 0.0.0.0 is taken (#22 undone)",
+      "model": "dhcp_exchange_model",
+      "controls": [
+        "dhcp_exchange_survive"
+      ],
+      "edits": [
+        {
+          "old": "let grants_an_address = reply.message_type == DHCP_NAK || reply.lease.ip != 0;",
+          "new": "let grants_an_address = true;"
+        }
+      ]
+    },
+    {
+      "id": "J10",
+      "file": "main/features/init/src/spi/dhcp.rs",
+      "description": "a NAK is not waited for: only an ACK answers a REQUEST",
+      "model": "dhcp_exchange_model",
+      "controls": [
+        "dhcp_exchange_survive"
+      ],
+      "edits": [
+        {
+          "old": "accept: &[DHCP_ACK, DHCP_NAK],",
+          "new": "accept: &[DHCP_ACK],"
+        }
+      ]
+    },
+    {
+      "id": "J11",
+      "file": "main/features/init/src/spi/dhcp.rs",
+      "description": "a NAK at the limit starts the exchange again to a DISCOVER that cannot be sent, so the failure is NoOffer (#24 undone)",
+      "model": "dhcp_exchange_model",
+      "controls": [
+        "dhcp_exchange_survive"
+      ],
+      "edits": [
+        {
+          "old": "if refusals > MAX_NAK_RESTARTS || elapsed_ms(link, start) >= policy.overall_limit_ms {",
+          "new": "if refusals > MAX_NAK_RESTARTS {"
+        }
+      ]
     }
   ]
 }

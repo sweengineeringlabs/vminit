@@ -89,3 +89,17 @@ path = "src/pkg_extract_survive.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "dhcp_exchange_model"
+path = "src/dhcp_exchange_model.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "dhcp_exchange_survive"
+path = "src/dhcp_exchange_survive.rs"
+test = false
+doc = false
+bench = false
