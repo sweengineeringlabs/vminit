@@ -550,3 +550,73 @@ fn test_acquire_lease_malformed_datagram_is_ignored_and_the_exchange_goes_on() {
     let mut link = FakeLink::new(responder);
     assert_eq!(acquire_lease(&mut link, &DhcpPolicy::default()).unwrap(), expected_lease());
 }
+
+// ── a reply that grants no address (vminit#22) ────────────────────────────────────────────
+
+const NO_ADDRESS: [u8; 4] = [0, 0, 0, 0];
+
+#[test]
+fn test_acquire_lease_an_offer_that_grants_the_address_zero_is_not_taken() {
+    // RFC 2131 4.3.1: the server fills in yiaddr; an OFFER without an address is malformed. Taking it
+    // sent a REQUEST for 0.0.0.0 and ended with a lease of the address 0.
+    let responder: Responder = Box::new(|packet| match packet[242] {
+        DHCP_DISCOVER => vec![server_reply_granting(DHCP_OFFER, xid_of(packet), NO_ADDRESS)],
+        _ => vec![],
+    });
+    let mut link = FakeLink::new(responder);
+    let failure = acquire_lease(&mut link, &DhcpPolicy::default()).expect_err("no usable OFFER came");
+    assert!(matches!(failure, DhcpFailure::NoOffer { .. }), "{:?}", failure);
+    assert!(link.sends_of(DHCP_REQUEST).is_empty(), "a REQUEST was sent for an OFFER with no address");
+}
+
+#[test]
+fn test_acquire_lease_an_ack_that_grants_the_address_zero_is_not_taken() {
+    let responder: Responder = Box::new(|packet| match packet[242] {
+        DHCP_DISCOVER => vec![server_reply(DHCP_OFFER, xid_of(packet))],
+        DHCP_REQUEST => vec![server_reply_granting(DHCP_ACK, xid_of(packet), NO_ADDRESS)],
+        _ => vec![],
+    });
+    let mut link = FakeLink::new(responder);
+    let outcome = acquire_lease(&mut link, &DhcpPolicy::default());
+    assert!(matches!(outcome, Err(DhcpFailure::NoAck { .. })), "an ACK of 0.0.0.0 gave {:?}", outcome);
+}
+
+#[test]
+fn test_acquire_lease_a_usable_reply_after_one_with_no_address_is_taken() {
+    let responder: Responder = Box::new(|packet| match packet[242] {
+        DHCP_DISCOVER => vec![
+            server_reply_granting(DHCP_OFFER, xid_of(packet), NO_ADDRESS),
+            server_reply(DHCP_OFFER, xid_of(packet)),
+        ],
+        DHCP_REQUEST => vec![
+            server_reply_granting(DHCP_ACK, xid_of(packet), NO_ADDRESS),
+            server_reply(DHCP_ACK, xid_of(packet)),
+        ],
+        _ => vec![],
+    });
+    let mut link = FakeLink::new(responder);
+    let lease = acquire_lease(&mut link, &DhcpPolicy::default()).expect("the usable replies are taken");
+    assert_eq!(lease, expected_lease());
+}
+
+#[test]
+fn test_acquire_lease_a_nak_has_no_address_by_design_and_still_restarts_the_exchange() {
+    // a real server's NAK carries yiaddr 0 (RFC 2131 4.3.2); it must not be dropped with the replies that grant nothing
+    let mut requests = 0;
+    let responder: Responder = Box::new(move |packet| match packet[242] {
+        DHCP_DISCOVER => vec![server_reply(DHCP_OFFER, xid_of(packet))],
+        DHCP_REQUEST => {
+            requests += 1;
+            if requests == 1 {
+                vec![server_reply_granting(DHCP_NAK, xid_of(packet), NO_ADDRESS)]
+            } else {
+                vec![server_reply(DHCP_ACK, xid_of(packet))]
+            }
+        }
+        _ => vec![],
+    });
+    let mut link = FakeLink::new(responder);
+    let lease = acquire_lease(&mut link, &DhcpPolicy::default()).expect("the exchange starts over after the NAK");
+    assert_eq!(lease, expected_lease());
+    assert_eq!(link.sends_of(DHCP_DISCOVER).len(), 2, "the NAK sent the exchange back to a DISCOVER");
+}
