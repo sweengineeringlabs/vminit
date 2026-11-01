@@ -250,7 +250,9 @@ pub fn acquire_lease<L: DhcpLink>(link: &mut L, policy: &DhcpPolicy) -> Result<D
             Some(reply) if reply.message_type == DHCP_ACK => return Ok(reply.lease),
             Some(_) => {
                 refusals += 1;
-                if refusals > MAX_NAK_RESTARTS {
+                // The exchange starts over only if it may and there is time: otherwise the last thing the server did was refuse a
+                // REQUEST, so the failure is "no ACK". Going back to a DISCOVER at the limit made it "no OFFER" (vminit#24).
+                if refusals > MAX_NAK_RESTARTS || elapsed_ms(link, start) >= policy.overall_limit_ms {
                     return Err(DhcpFailure::NoAck { requests, elapsed_ms: elapsed_ms(link, start) });
                 }
                 link.log("DHCP: the server refused the address (NAK), starting again");
