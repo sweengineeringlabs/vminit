@@ -408,6 +408,32 @@ pub unsafe fn write_file(path: *const u8, data: &[u8]) -> bool {
     true
 }
 
+/// Copy `src` to `dst` (create/truncate), `buf.len()` bytes at a time, so the file is never held whole in memory.
+/// Returns the number of bytes copied, or `None` when `src` cannot be opened or a read or a write fails (`dst` is then incomplete).
+pub unsafe fn copy_file(src: *const u8, dst: *const u8, buf: &mut [u8]) -> Option<u64> {
+    if buf.is_empty() { return None; }
+    let from = open(src, O_RDONLY, 0);
+    if from < 0 { return None; }
+    let to = open(dst, O_WRONLY | O_CREAT | O_TRUNC, 0o644);
+    if to < 0 { close(from); return None; }
+    let mut copied = 0u64;
+    let complete = loop {
+        let n = read(from, buf.as_mut_ptr(), buf.len());
+        if n < 0 { break false; }
+        if n == 0 { break true; }
+        let mut written = 0usize;
+        while written < n as usize {
+            let w = write(to, buf.as_ptr().add(written), n as usize - written);
+            if w <= 0 { close(from); close(to); return None; }
+            written += w as usize;
+        }
+        copied += n as u64;
+    };
+    close(from);
+    close(to);
+    if complete { Some(copied) } else { None }
+}
+
 /// Read up to `buf.len()` bytes from `path` into `buf`. Returns bytes read, or -1 on error.
 pub unsafe fn read_file(path: *const u8, buf: &mut [u8]) -> isize {
     let fd = open(path, O_RDONLY, 0);
