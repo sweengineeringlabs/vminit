@@ -1,0 +1,5 @@
+dns=1.1.1.1
+dns=::1
+dns=8.8.8.8
+dns=9.9.9.9
+network=none

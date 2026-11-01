@@ -1,0 +1,105 @@
+[package]
+name = "vminit_fuzz_bin"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "cargo-fuzz targets for the init's parsers of guest-controlled bytes (vminit#13)"
+
+[package.metadata]
+cargo-fuzz = true
+
+[lib]
+name = "vminit_fuzz_bin"
+path = "src/lib.rs"
+
+[dependencies]
+libfuzzer-sys = "0.4"
+swe_vminit_init = { path = "../../init" }
+swe_vminit_pkg = { path = "../../pkg" }
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+
+
+[[bin]]
+name = "read_marker"
+path = "src/read_marker.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_dhcp_response"
+path = "src/parse_dhcp_response.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_config"
+path = "src/parse_config.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_overlay_manifest"
+path = "src/parse_overlay_manifest.rs"
+test = false
+doc = false
+bench = false
+
+# targets that check the values returned (structure-aware: the input is built from fields and the result is compared)
+[[bin]]
+name = "read_marker_model"
+path = "src/read_marker_model.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_dhcp_model"
+path = "src/parse_dhcp_model.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_overlay_model"
+path = "src/parse_overlay_model.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_config_model"
+path = "src/parse_config_model.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pkg_extract_model"
+path = "src/pkg_extract_model.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pkg_extract_survive"
+path = "src/pkg_extract_survive.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "dhcp_exchange_model"
+path = "src/dhcp_exchange_model.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "dhcp_exchange_survive"
+path = "src/dhcp_exchange_survive.rs"
+test = false
+doc = false
+bench = false

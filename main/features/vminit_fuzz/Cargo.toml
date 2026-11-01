@@ -1,0 +1,7 @@
+# Fuzzing of the init's parsers of guest-controlled bytes (vminit#13).
+# Its own workspace: built with a nightly toolchain and not part of the init's workspace.
+#   bin  the fuzz targets (the package cargo-fuzz runs)
+# The targets hold their own models, so there is no shared crate and no probe yet.
+[workspace]
+resolver = "2"
+members = ["bin"]
