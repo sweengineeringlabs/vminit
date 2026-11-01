@@ -30,6 +30,17 @@ fn build_envp(env: &[(String, String)]) -> (Vec<Vec<u8>>, Vec<*const u8>) {
     (owned, ptrs)
 }
 
+/// In a forked child: make `root` the root directory and stand in it. A failure ends the child with 126: running a program in the
+/// initrd's root instead of the rootfs it was configured for would be worse than not running it, and the log says why.
+fn enter_rootfs(root: &str, what: &str) {
+    let root_cstr = format!("{}\0", root);
+    let in_root = unsafe { ffi::chroot(root_cstr.as_ptr()) } == 0 && unsafe { ffi::chdir(b"/\0".as_ptr()) } == 0;
+    if !in_root {
+        serial::log(&format!("chroot into {root} failed; not running {what}"));
+        unsafe { ffi::exit_group(126) }
+    }
+}
+
 pub fn run_entrypoint(args: &[String], env: &[(String, String)], rootfs: Option<&str>) -> i32 {
     if args.is_empty() { return 0; }
 
@@ -44,8 +55,7 @@ pub fn run_entrypoint(args: &[String], env: &[(String, String)], rootfs: Option<
 
     if pid == 0 {
         if let Some(root) = rootfs {
-            let root_cstr = format!("{}\0", root);
-            unsafe { ffi::chroot(root_cstr.as_ptr()); ffi::chdir(b"/\0".as_ptr()); }
+            enter_rootfs(root, &args[0]);
         }
 
         let (argv_bufs, argv_ptrs) = build_cstr_vec(args);
@@ -88,8 +98,7 @@ pub fn run_interactive_shell(env: &[(String, String)], rootfs: Option<&str>) -> 
         }
 
         if let Some(root) = rootfs {
-            let root_cstr = format!("{}\0", root);
-            unsafe { ffi::chroot(root_cstr.as_ptr()); ffi::chdir(b"/\0".as_ptr()); }
+            enter_rootfs(root, "the shell");
         }
 
         let mut term_env = env.to_vec();
