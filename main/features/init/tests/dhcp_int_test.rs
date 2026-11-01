@@ -620,3 +620,19 @@ fn test_acquire_lease_a_nak_has_no_address_by_design_and_still_restarts_the_exch
     assert_eq!(lease, expected_lease());
     assert_eq!(link.sends_of(DHCP_DISCOVER).len(), 2, "the NAK sent the exchange back to a DISCOVER");
 }
+
+#[test]
+fn test_acquire_lease_a_nak_that_leaves_no_time_to_start_again_is_no_ack_not_no_offer() {
+    // The OFFER came and the server then refused the REQUEST, so "no OFFER" says the wrong thing (vminit#24). The replies take 2 ms:
+    // the OFFER arrives at 2 ms, the REQUEST goes out, the NAK arrives at 4 ms, exactly the limit (as in the fuzzer's crash input).
+    let responder: Responder = Box::new(|packet| match packet[242] {
+        DHCP_DISCOVER => vec![server_reply(DHCP_OFFER, xid_of(packet))],
+        DHCP_REQUEST => vec![server_reply_granting(DHCP_NAK, xid_of(packet), NO_ADDRESS)],
+        _ => vec![],
+    });
+    let policy = DhcpPolicy { overall_limit_ms: 4, first_timeout_ms: 1_000, max_timeout_ms: 1_000, jitter_divisor: 0, ..DhcpPolicy::default() };
+    let mut link = FakeLink::new(responder);
+    let failure = acquire_lease(&mut link, &policy).expect_err("the server refused");
+    assert!(matches!(failure, DhcpFailure::NoAck { requests: 1, .. }), "{:?}", failure);
+    assert_eq!(link.sends_of(DHCP_DISCOVER).len(), 1, "no new DISCOVER was sent: the limit had passed");
+}
